@@ -63,9 +63,9 @@
 
     // ===== REEL LAYOUT =====
     // 5 reels, 3 visible rows each - this is what the player sees
-    // Each reel gets a random set of symbols for now (placeholder)
     const NUM_REELS = 5;
     const NUM_ROWS = 3;
+    const REEL_STRIP_LENGTH = 30; // how many symbols on each virtual reel strip
 
     // Generate a random symbol index (placeholder until real math engine)
     function randomSymbol() {
@@ -75,12 +75,106 @@
         return idx;
     }
 
-    // Fill the visible grid with random symbols
-    const reelGrid = [];
+    // ===== REEL STRIPS =====
+    // Each reel has a long strip of symbols it scrolls through
+    // Think of it like a belt of symbols wrapped around a cylinder
+    const reelStrips = [];
     for (let r = 0; r < NUM_REELS; r++) {
-        reelGrid[r] = [];
-        for (let row = 0; row < NUM_ROWS; row++) {
-            reelGrid[r][row] = randomSymbol();
+        reelStrips[r] = [];
+        for (let i = 0; i < REEL_STRIP_LENGTH; i++) {
+            reelStrips[r][i] = randomSymbol();
+        }
+    }
+
+    // ===== REEL STATE =====
+    // Each reel tracks where it is on the strip and how fast it's moving
+    const reels = [];
+    for (let r = 0; r < NUM_REELS; r++) {
+        reels[r] = {
+            position: Math.floor(Math.random() * REEL_STRIP_LENGTH), // current stop position on strip
+            offset: 0,          // pixel offset for smooth scrolling (0 = symbol fully aligned)
+            speed: 0,           // current scroll speed in pixels per frame
+            spinning: false,    // is this reel currently spinning?
+            stopping: false,    // is this reel slowing down to stop?
+            targetPosition: 0,  // where the reel will land when it stops
+            bounceBack: 0,      // for the "overshoot and bounce" effect when stopping
+            bouncePhase: 0      // tracks where we are in the bounce animation
+        };
+    }
+
+    // ===== SPIN CONTROL =====
+    // These variables manage the overall spin sequence
+    let isSpinning = false;          // true while any reel is still moving
+    const SPIN_SPEED = 40;           // max speed when reels are at full spin (pixels per frame)
+    const SPIN_UP_TIME = 300;        // milliseconds to reach full speed
+    const STOP_DELAY_PER_REEL = 300; // milliseconds between each reel stopping (left to right)
+
+    // Get a symbol from a reel strip at any position (wraps around)
+    function getStripSymbol(reelIndex, pos) {
+        const len = reelStrips[reelIndex].length;
+        return reelStrips[reelIndex][((pos % len) + len) % len];
+    }
+
+    // Fill the visible grid from reel strip positions (used when reels are stopped)
+    const reelGrid = [];
+    function updateReelGrid() {
+        for (let r = 0; r < NUM_REELS; r++) {
+            reelGrid[r] = [];
+            for (let row = 0; row < NUM_ROWS; row++) {
+                reelGrid[r][row] = getStripSymbol(r, reels[r].position + row);
+            }
+        }
+    }
+    updateReelGrid();
+
+    // ===== START SPIN =====
+    // Called when player presses the spin button
+    function startSpin() {
+        if (isSpinning) return; // can't spin while already spinning
+        isSpinning = true;
+
+        // Randomize new target positions for each reel (where it will land)
+        for (let r = 0; r < NUM_REELS; r++) {
+            reels[r].spinning = true;
+            reels[r].stopping = false;
+            reels[r].speed = 0;
+            reels[r].bounceBack = 0;
+            reels[r].bouncePhase = 0;
+            // Pick a random landing spot at least 2 full rotations away
+            reels[r].targetPosition = Math.floor(Math.random() * REEL_STRIP_LENGTH);
+        }
+
+        // Ramp up speed over SPIN_UP_TIME, then schedule stops left to right
+        const spinStartTime = performance.now();
+
+        function rampUp() {
+            const elapsed = performance.now() - spinStartTime;
+            const progress = Math.min(elapsed / SPIN_UP_TIME, 1);
+            // Ease-out curve for natural acceleration
+            const easedProgress = 1 - Math.pow(1 - progress, 2);
+
+            for (let r = 0; r < NUM_REELS; r++) {
+                if (reels[r].spinning && !reels[r].stopping) {
+                    reels[r].speed = SPIN_SPEED * easedProgress;
+                }
+            }
+
+            if (progress < 1) {
+                requestAnimationFrame(rampUp);
+            } else {
+                // Full speed reached - schedule each reel to stop one by one
+                scheduleStops();
+            }
+        }
+        requestAnimationFrame(rampUp);
+    }
+
+    // Schedule reels to stop one at a time, left to right
+    function scheduleStops() {
+        for (let r = 0; r < NUM_REELS; r++) {
+            setTimeout(() => {
+                reels[r].stopping = true;
+            }, r * STOP_DELAY_PER_REEL);
         }
     }
 
@@ -310,13 +404,42 @@
     }
 
     // Draw all 5 reels with their 3 visible symbols each
+    // When spinning, symbols scroll vertically with a pixel offset
     function drawReels() {
+        // We need to clip the reel area so symbols don't draw outside the window
+        const totalReelW = (REEL_W * NUM_REELS) + (REEL_GAP * (NUM_REELS - 1));
+        const clipX = REEL_AREA_X - 4;
+        const clipY = REEL_AREA_Y;
+        const clipW = totalReelW + 8;
+        const clipH = REEL_H;
+
+        ctx.save();
+        // Set up clipping region so symbols stay inside the reel window
+        ctx.beginPath();
+        ctx.rect(clipX, clipY, clipW, clipH);
+        ctx.clip();
+
         for (let r = 0; r < NUM_REELS; r++) {
             const reelX = REEL_AREA_X + r * (REEL_W + REEL_GAP);
+            const reel = reels[r];
 
             // Reel column background
             ctx.fillStyle = '#0a0a1a';
             roundRect(reelX, REEL_AREA_Y, REEL_W, REEL_H, 4, true);
+
+            // Calculate the vertical start position for symbols
+            // offset shifts symbols up; when offset reaches SYMBOL_H, we advance position
+            const baseY = REEL_AREA_Y + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+
+            // Draw one extra symbol above and below for smooth scrolling
+            for (let row = -1; row <= NUM_ROWS; row++) {
+                const symY = baseY + row * SYMBOL_H - reel.offset + reel.bounceBack;
+                // Only draw if the symbol would be at least partially visible
+                if (symY + SYMBOL_H > REEL_AREA_Y - SYMBOL_H && symY < REEL_AREA_Y + REEL_H + SYMBOL_H) {
+                    const symbolIdx = getStripSymbol(r, reel.position + row);
+                    drawSymbol(symbolIdx, reelX, symY, REEL_W, SYMBOL_H);
+                }
+            }
 
             // Subtle reel divider lines
             if (r < NUM_REELS - 1) {
@@ -327,14 +450,13 @@
                 ctx.lineTo(reelX + REEL_W + REEL_GAP / 2, REEL_AREA_Y + REEL_H - 10);
                 ctx.stroke();
             }
+        }
 
-            // Draw each symbol in the reel
-            for (let row = 0; row < NUM_ROWS; row++) {
-                const symY = REEL_AREA_Y + row * SYMBOL_H + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
-                drawSymbol(reelGrid[r][row], reelX, symY, REEL_W, SYMBOL_H);
-            }
+        ctx.restore(); // remove clipping
 
-            // Row divider lines between symbols
+        // Row divider lines (drawn outside clip so they're always crisp)
+        for (let r = 0; r < NUM_REELS; r++) {
+            const reelX = REEL_AREA_X + r * (REEL_W + REEL_GAP);
             for (let row = 1; row < NUM_ROWS; row++) {
                 const lineY = REEL_AREA_Y + row * SYMBOL_H + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
                 ctx.strokeStyle = '#333355';
@@ -484,9 +606,149 @@
         return '#' + (r << 16 | g << 8 | b).toString(16).padStart(6, '0');
     }
 
-    // ===== MAIN DRAW =====
-    // This draws everything on screen once
-    function draw() {
+    // ===== SPIN BUTTON =====
+    // Big glowing button below the bottom panel
+    const SPIN_BTN_X = MACHINE_X + MACHINE_W / 2 - 120;
+    const SPIN_BTN_Y = REEL_AREA_Y + REEL_H + 190;
+    const SPIN_BTN_W = 240;
+    const SPIN_BTN_H = 70;
+
+    function drawSpinButton() {
+        // Button glow when not spinning
+        if (!isSpinning) {
+            ctx.shadowColor = '#44FF44';
+            ctx.shadowBlur = 20;
+        }
+
+        // Button background
+        const btnGrad = ctx.createLinearGradient(0, SPIN_BTN_Y, 0, SPIN_BTN_Y + SPIN_BTN_H);
+        if (isSpinning) {
+            btnGrad.addColorStop(0, '#333333');
+            btnGrad.addColorStop(1, '#222222');
+        } else {
+            btnGrad.addColorStop(0, '#22AA22');
+            btnGrad.addColorStop(1, '#117711');
+        }
+        ctx.fillStyle = btnGrad;
+        roundRect(SPIN_BTN_X, SPIN_BTN_Y, SPIN_BTN_W, SPIN_BTN_H, 12, true);
+        ctx.shadowBlur = 0;
+
+        // Button border
+        ctx.strokeStyle = isSpinning ? '#555555' : '#44FF44';
+        ctx.lineWidth = 2;
+        roundRect(SPIN_BTN_X, SPIN_BTN_Y, SPIN_BTN_W, SPIN_BTN_H, 12, false, true);
+
+        // Button text
+        ctx.fillStyle = isSpinning ? '#888888' : '#FFFFFF';
+        ctx.font = 'bold 36px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(isSpinning ? 'SPINNING...' : 'SPIN', SPIN_BTN_X + SPIN_BTN_W / 2, SPIN_BTN_Y + SPIN_BTN_H / 2);
+    }
+
+    // ===== CLICK HANDLING =====
+    // Detect clicks on the spin button (works with the scaled canvas)
+    canvas.addEventListener('click', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const clickX = (e.clientX - rect.left) * scaleX;
+        const clickY = (e.clientY - rect.top) * scaleY;
+
+        // Check if click is inside the spin button
+        if (clickX >= SPIN_BTN_X && clickX <= SPIN_BTN_X + SPIN_BTN_W &&
+            clickY >= SPIN_BTN_Y && clickY <= SPIN_BTN_Y + SPIN_BTN_H) {
+            startSpin();
+        }
+    });
+
+    // Also allow spacebar to spin (will map to JAMMA button later)
+    document.addEventListener('keydown', function(e) {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            startSpin();
+        }
+    });
+
+    // ===== REEL UPDATE LOGIC =====
+    // Called every frame to move the reels during a spin
+    function updateReels() {
+        if (!isSpinning) return;
+
+        let allStopped = true;
+
+        for (let r = 0; r < NUM_REELS; r++) {
+            const reel = reels[r];
+            if (!reel.spinning) continue;
+
+            allStopped = false;
+
+            if (reel.stopping) {
+                // ===== DECELERATION PHASE =====
+                // Slow down gradually until we land on the target position
+                reel.speed *= 0.92; // friction - slows down each frame
+
+                // Move the reel by current speed
+                reel.offset += reel.speed;
+
+                // When offset passes a full symbol height, advance the position
+                while (reel.offset >= SYMBOL_H) {
+                    reel.offset -= SYMBOL_H;
+                    reel.position = (reel.position + 1) % REEL_STRIP_LENGTH;
+                }
+
+                // When slow enough and close to target, snap to final position
+                if (reel.speed < 1.5) {
+                    // Snap to target
+                    reel.position = reel.targetPosition;
+                    reel.offset = 0;
+                    reel.speed = 0;
+
+                    // Start the bounce-back effect (overshoot then settle)
+                    if (reel.bouncePhase === 0) {
+                        reel.bouncePhase = 1;
+                        reel.bounceBack = -12; // overshoot downward
+                    }
+                }
+            } else {
+                // ===== FULL SPEED PHASE =====
+                // Reel is at full speed, just keep scrolling
+                reel.offset += reel.speed;
+
+                // Advance position when we scroll past a full symbol
+                while (reel.offset >= SYMBOL_H) {
+                    reel.offset -= SYMBOL_H;
+                    reel.position = (reel.position + 1) % REEL_STRIP_LENGTH;
+                }
+            }
+
+            // ===== BOUNCE ANIMATION =====
+            // After landing, do a small bounce for a satisfying stop feel
+            if (reel.bouncePhase > 0) {
+                // Spring back toward zero
+                reel.bounceBack *= 0.7;
+                if (Math.abs(reel.bounceBack) < 0.5) {
+                    reel.bounceBack = 0;
+                    reel.bouncePhase = 0;
+                    reel.spinning = false; // this reel is done
+                }
+            }
+        }
+
+        // Check if all reels have fully stopped
+        if (allStopped) {
+            isSpinning = false;
+            updateReelGrid();
+        }
+    }
+
+    // ===== ANIMATION LOOP =====
+    // This runs 60 times per second using requestAnimationFrame (rAF)
+    // It redraws everything every frame for smooth animation
+    function gameLoop() {
+        // Update reel positions if spinning
+        updateReels();
+
         // Clear the entire canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -496,10 +758,14 @@
         drawReels();
         drawPaylineMarkers();
         drawBottomPanel();
+        drawSpinButton();
+
+        // Request the next frame
+        requestAnimationFrame(gameLoop);
     }
 
-    // Draw the initial screen
-    draw();
+    // Start the animation loop
+    gameLoop();
 
     </script>
 </body>
