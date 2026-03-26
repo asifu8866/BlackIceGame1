@@ -6,8 +6,8 @@
 - [x] Set up HTML5 Canvas game area (1920x1080 for cabinet display)
 - [x] Create symbol artwork (Cherry, Bar, Double Bar, Triple Bar, Seven, Bell, Diamond, Wild, Fireball, Blank)
 - [x] Build 5-reel layout with 3 visible rows each
-- [ ] Animate reel spinning with smooth start and stop
-- [ ] Add spin button and credit display UI
+- [x] Animate reel spinning with smooth start and stop
+- [x] Add spin button and credit display UI
 - [ ] Add win line highlight animations
 - [ ] Add symbol landing effects and sound triggers
 
