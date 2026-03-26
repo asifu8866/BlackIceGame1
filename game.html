@@ -212,6 +212,14 @@
     // ===== START SPIN =====
     // Called when player presses the spin button
     function startSpin() {
+        // During Hold and Spin bonus: pressing spin triggers a respin instead
+        if (gameMode === 'HOLD_AND_SPIN') {
+            if (bonusPhase === 'ACTIVE') {
+                startBonusRespin();
+            }
+            return; // block normal spins during bonus
+        }
+
         if (isSpinning) return; // can't spin while already spinning
         if (credits < totalBet) return; // not enough credits to spin
         isSpinning = true;
@@ -631,17 +639,19 @@
         ctx.font = 'bold 42px Arial, sans-serif';
         ctx.fillText(formatCredits(totalBet), MACHINE_X + MACHINE_W / 2, panelY + 48);
 
-        // Win display - shows last spin winnings (green glow when > 0)
+        // Win display - shows bonus total during Hold and Spin, or last spin win
+        const displayWin = gameMode === 'HOLD_AND_SPIN' ? bonusTotalWin : lastWin;
+        const winLabel = gameMode === 'HOLD_AND_SPIN' ? 'BONUS' : 'WIN';
         ctx.fillStyle = '#AAAACC';
         ctx.font = '22px Arial, sans-serif';
-        ctx.fillText('WIN', MACHINE_X + MACHINE_W - 250, panelY + 15);
-        if (lastWin > 0) {
-            ctx.shadowColor = '#44FF44';
+        ctx.fillText(winLabel, MACHINE_X + MACHINE_W - 250, panelY + 15);
+        if (displayWin > 0) {
+            ctx.shadowColor = gameMode === 'HOLD_AND_SPIN' ? '#FF6600' : '#44FF44';
             ctx.shadowBlur = 15;
         }
-        ctx.fillStyle = lastWin > 0 ? '#44FF44' : '#666688';
+        ctx.fillStyle = displayWin > 0 ? (gameMode === 'HOLD_AND_SPIN' ? '#FF8800' : '#44FF44') : '#666688';
         ctx.font = 'bold 42px Arial, sans-serif';
-        ctx.fillText(formatCredits(lastWin), MACHINE_X + MACHINE_W - 250, panelY + 48);
+        ctx.fillText(formatCredits(displayWin), MACHINE_X + MACHINE_W - 250, panelY + 48);
         ctx.shadowBlur = 0;
     }
 
@@ -709,6 +719,473 @@
     // Format a number with commas for display (1000 -> "1,000")
     function formatCredits(num) {
         return num.toLocaleString();
+    }
+
+    // ===== HOLD AND SPIN BONUS SYSTEM =====
+    // The signature feature - modeled after Fire Link by Light & Wonder
+    // When triggered, FIREBALL symbols lock on the grid with credit values.
+    // Player gets 3 free respins to collect more fireballs.
+    // Every new fireball resets the counter back to 3.
+    // When 3 respins pass with no new fireball, bonus ends and all
+    // fireball credit values are totaled and awarded to the player.
+
+    // --- Bonus game state ---
+    let gameMode = 'NORMAL';          // NORMAL = regular play, HOLD_AND_SPIN = bonus active
+    let bonusGrid = [];               // 5x3 grid: null (empty cell) or { value, label, color, isJackpot }
+    let bonusRespins = 3;             // remaining respins (resets to 3 when new fireball lands)
+    let bonusTotalWin = 0;            // running sum of all fireball credit values
+    let bonusPhase = 'IDLE';          // IDLE, TRIGGER, ACTIVE, SPINNING, AWARD
+    let bonusAnimTimer = 0;           // frame counter for current animation phase
+    let bonusNewLands = [];           // [{reel, row}] - positions that just got a fireball (for flash)
+    let spinsSinceBonus = 0;          // counts normal spins since last bonus ended
+    let nextBonusTrigger = 0;         // how many spins until next bonus (80-120)
+
+    // Animation durations in frames (60 frames = 1 second)
+    const BONUS_TRIGGER_DURATION = 120;  // 2 seconds for "HOLD & SPIN!" announcement
+    const BONUS_RESPIN_DURATION = 48;    // 0.8 seconds for respin shimmer animation
+    const BONUS_AWARD_DURATION = 180;    // 3 seconds for award count-up
+
+    // --- Trigger timing ---
+    // Roll a random number between 80 and 120 for when the next bonus triggers
+    function rollNextBonusTrigger() {
+        nextBonusTrigger = 80 + Math.floor(Math.random() * 41);
+    }
+    rollNextBonusTrigger(); // set the first trigger target
+
+    // --- Fireball credit value tables ---
+    // Each fireball shows a credit value when it locks on the grid
+    // Values are multiplied by the total bet (so higher bets = bigger values)
+    const FIREBALL_VALUE_TABLE = [
+        { mult: 1,   weight: 30 },   // very common (1x bet = 10 credits at bet 10)
+        { mult: 1.5, weight: 25 },   // common (15 credits)
+        { mult: 2,   weight: 20 },   // common (20 credits)
+        { mult: 3,   weight: 12 },   // uncommon (30 credits)
+        { mult: 5,   weight: 8 },    // uncommon (50 credits)
+        { mult: 10,  weight: 3 },    // rare (100 credits)
+        { mult: 20,  weight: 1.5 },  // very rare (200 credits)
+    ];
+
+    // Jackpot tiers (matches the jackpot bar at the top of the machine)
+    const JACKPOT_VALUES = [
+        { name: 'MINI',  value: 50,    color: '#44FF44', weight: 60 },  // hits most often
+        { name: 'MINOR', value: 200,   color: '#44BBFF', weight: 25 },
+        { name: 'MAJOR', value: 1000,  color: '#FFD700', weight: 12 },
+        { name: 'MEGA',  value: 10000, color: '#FF2222', weight: 3 },   // ultra rare
+    ];
+
+    const JACKPOT_CHANCE = 0.03;           // 3% chance each fireball is a jackpot
+    const BONUS_FIREBALL_CHANCE = 0.20;    // 20% chance per empty cell per respin
+    const BONUS_INITIAL_FIREBALLS = 6;     // how many fireballs appear when bonus triggers
+
+    // Pick a random credit value for a fireball
+    function randomFireballValue() {
+        // Small chance to be a jackpot instead of regular credits
+        if (Math.random() < JACKPOT_CHANCE) {
+            return randomJackpotValue();
+        }
+
+        // Weighted random selection from the value table
+        const totalWeight = FIREBALL_VALUE_TABLE.reduce((sum, v) => sum + v.weight, 0);
+        let roll = Math.random() * totalWeight;
+        for (const entry of FIREBALL_VALUE_TABLE) {
+            roll -= entry.weight;
+            if (roll <= 0) {
+                const creditValue = Math.round(entry.mult * totalBet);
+                return { value: creditValue, label: formatCredits(creditValue), color: '#FFFFFF', isJackpot: false };
+            }
+        }
+        return { value: totalBet, label: formatCredits(totalBet), color: '#FFFFFF', isJackpot: false };
+    }
+
+    // Pick a random jackpot level (weighted - MINI hits most often)
+    function randomJackpotValue() {
+        const totalWeight = JACKPOT_VALUES.reduce((sum, j) => sum + j.weight, 0);
+        let roll = Math.random() * totalWeight;
+        for (const jp of JACKPOT_VALUES) {
+            roll -= jp.weight;
+            if (roll <= 0) {
+                return { value: jp.value, label: jp.name, color: jp.color, isJackpot: true, jackpotName: jp.name };
+            }
+        }
+        return { value: 50, label: 'MINI', color: '#44FF44', isJackpot: true, jackpotName: 'MINI' };
+    }
+
+    // Create an empty 5x3 bonus grid (all cells null)
+    function initBonusGrid() {
+        bonusGrid = [];
+        for (let r = 0; r < NUM_REELS; r++) {
+            bonusGrid[r] = [];
+            for (let row = 0; row < NUM_ROWS; row++) {
+                bonusGrid[r][row] = null;
+            }
+        }
+    }
+
+    // Check if the bonus should trigger after a normal spin finishes
+    function checkBonusTrigger() {
+        if (gameMode !== 'NORMAL') return;
+        spinsSinceBonus++;
+
+        if (spinsSinceBonus >= nextBonusTrigger) {
+            triggerBonus();
+        }
+    }
+
+    // Start the Hold and Spin bonus round
+    function triggerBonus() {
+        gameMode = 'HOLD_AND_SPIN';
+        bonusPhase = 'TRIGGER';
+        bonusAnimTimer = 0;
+        bonusRespins = 3;
+        bonusTotalWin = 0;
+        bonusNewLands = [];
+
+        // Clear any win display from the triggering spin
+        activeWins = [];
+        showingWins = false;
+        winDisplayIndex = -1;
+
+        initBonusGrid();
+
+        // Build a list of all 15 grid positions, shuffle, pick first 6
+        const positions = [];
+        for (let r = 0; r < NUM_REELS; r++) {
+            for (let row = 0; row < NUM_ROWS; row++) {
+                positions.push({ reel: r, row: row });
+            }
+        }
+        // Fisher-Yates shuffle for true randomness
+        for (let i = positions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [positions[i], positions[j]] = [positions[j], positions[i]];
+        }
+
+        // Place the initial fireballs
+        for (let i = 0; i < BONUS_INITIAL_FIREBALLS; i++) {
+            const pos = positions[i];
+            const fbValue = randomFireballValue();
+            bonusGrid[pos.reel][pos.row] = fbValue;
+            bonusTotalWin += fbValue.value;
+            bonusNewLands.push(pos);
+        }
+
+        playBonusTriggerSound();
+    }
+
+    // Start a bonus respin (called when player presses RESPIN button)
+    function startBonusRespin() {
+        if (bonusPhase !== 'ACTIVE') return;
+        bonusPhase = 'SPINNING';
+        bonusAnimTimer = 0;
+        bonusNewLands = [];  // clear previous flash markers
+        playSpinStartSound();
+    }
+
+    // Resolve the bonus respin - determine which empty cells get new fireballs
+    function resolveBonusRespin() {
+        let gotNewFireball = false;
+
+        // Each empty cell independently rolls for a fireball
+        for (let r = 0; r < NUM_REELS; r++) {
+            for (let row = 0; row < NUM_ROWS; row++) {
+                if (bonusGrid[r][row] === null) {
+                    if (Math.random() < BONUS_FIREBALL_CHANCE) {
+                        const fbValue = randomFireballValue();
+                        bonusGrid[r][row] = fbValue;
+                        bonusTotalWin += fbValue.value;
+                        bonusNewLands.push({ reel: r, row: row });
+                        gotNewFireball = true;
+                    }
+                }
+            }
+        }
+
+        if (gotNewFireball) {
+            // Any new fireball resets the counter back to 3
+            bonusRespins = 3;
+            playBonusLandSound();
+        } else {
+            bonusRespins--;
+        }
+
+        // Check if grid is completely full (Grand Prize!)
+        let allFull = true;
+        for (let r = 0; r < NUM_REELS; r++) {
+            for (let row = 0; row < NUM_ROWS; row++) {
+                if (bonusGrid[r][row] === null) { allFull = false; break; }
+            }
+            if (!allFull) break;
+        }
+        if (allFull) {
+            // Full grid = MEGA jackpot bonus on top of all collected values
+            bonusTotalWin += JACKPOT_VALUES.find(j => j.name === 'MEGA').value;
+        }
+
+        // End bonus if out of respins or grid is full
+        if (bonusRespins <= 0 || allFull) {
+            bonusPhase = 'AWARD';
+            bonusAnimTimer = 0;
+            playWinSound();
+        } else {
+            bonusPhase = 'ACTIVE';
+            bonusAnimTimer = 0;
+        }
+    }
+
+    // Update the bonus state machine each frame
+    function updateBonus() {
+        if (gameMode !== 'HOLD_AND_SPIN') return;
+
+        bonusAnimTimer++;
+
+        // Transition out of TRIGGER phase after the announcement animation
+        if (bonusPhase === 'TRIGGER' && bonusAnimTimer >= BONUS_TRIGGER_DURATION) {
+            bonusPhase = 'ACTIVE';
+            bonusAnimTimer = 0;
+            bonusNewLands = [];
+        }
+
+        // Transition out of SPINNING phase after respin animation
+        if (bonusPhase === 'SPINNING' && bonusAnimTimer >= BONUS_RESPIN_DURATION) {
+            resolveBonusRespin();
+        }
+
+        // Transition out of AWARD phase after count-up animation
+        if (bonusPhase === 'AWARD' && bonusAnimTimer >= BONUS_AWARD_DURATION) {
+            credits += bonusTotalWin;
+            lastWin = bonusTotalWin;
+            gameMode = 'NORMAL';
+            bonusPhase = 'IDLE';
+            spinsSinceBonus = 0;
+            rollNextBonusTrigger();
+        }
+    }
+
+    // --- Bonus Drawing Functions ---
+
+    // Draw a single locked fireball cell with its credit value
+    function drawBonusFireball(cell, x, y, w, h, reelIdx, rowIdx) {
+        const isNew = bonusNewLands.some(p => p.reel === reelIdx && p.row === rowIdx);
+        const pulse = 0.8 + 0.2 * Math.sin(performance.now() / 200 + reelIdx + rowIdx);
+
+        ctx.save();
+
+        // Fireball background - radial orange-to-red gradient
+        const grad = ctx.createRadialGradient(
+            x + w / 2, y + h / 2, 10,
+            x + w / 2, y + h / 2, w * 0.6
+        );
+        grad.addColorStop(0, '#FF8800');
+        grad.addColorStop(0.5, '#CC3300');
+        grad.addColorStop(1, '#661100');
+        ctx.fillStyle = grad;
+        roundRect(x + SYMBOL_PAD, y + SYMBOL_PAD, w - SYMBOL_PAD * 2, h - SYMBOL_PAD * 2, 8, true);
+
+        // Glowing orange border that pulses
+        ctx.shadowColor = '#FF6600';
+        ctx.shadowBlur = 15 * pulse;
+        ctx.strokeStyle = '#FF8800';
+        ctx.lineWidth = 2;
+        roundRect(x + SYMBOL_PAD, y + SYMBOL_PAD, w - SYMBOL_PAD * 2, h - SYMBOL_PAD * 2, 8, false, true);
+        ctx.shadowBlur = 0;
+
+        // Draw the credit value or jackpot name
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        if (cell.isJackpot) {
+            // Jackpot label with colored glow (e.g., "MINI" in green)
+            ctx.shadowColor = cell.color;
+            ctx.shadowBlur = 20;
+            ctx.fillStyle = cell.color;
+            ctx.font = 'bold 26px Arial, sans-serif';
+            ctx.fillText(cell.label, x + w / 2, y + h / 2);
+            ctx.shadowBlur = 0;
+        } else {
+            // Regular credit value in white
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 30px Arial, sans-serif';
+            ctx.fillText(cell.label, x + w / 2, y + h / 2);
+        }
+
+        // White flash on newly landed fireballs (fades over 30 frames)
+        if (isNew && bonusAnimTimer < 30) {
+            ctx.globalAlpha = 1 - bonusAnimTimer / 30;
+            ctx.fillStyle = '#FFFFFF';
+            roundRect(x + SYMBOL_PAD, y + SYMBOL_PAD, w - SYMBOL_PAD * 2, h - SYMBOL_PAD * 2, 8, true);
+        }
+
+        ctx.restore();
+    }
+
+    // Draw the entire Hold and Spin overlay on top of the reels
+    function drawBonusOverlay() {
+        if (gameMode !== 'HOLD_AND_SPIN') return;
+
+        const baseY = REEL_AREA_Y + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+        const totalReelW = (REEL_W * NUM_REELS) + (REEL_GAP * (NUM_REELS - 1));
+
+        // During TRIGGER phase: draw fireballs on top of the regular reels
+        // During ACTIVE/SPINNING/AWARD: draw the full bonus grid overlay
+        if (bonusPhase !== 'TRIGGER') {
+            // Dark overlay covering the entire reel area
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            ctx.fillRect(REEL_AREA_X - 24, REEL_AREA_Y - 24, totalReelW + 48, REEL_H + 48);
+            ctx.restore();
+        }
+
+        // Draw each cell of the bonus grid
+        for (let r = 0; r < NUM_REELS; r++) {
+            for (let row = 0; row < NUM_ROWS; row++) {
+                const cellX = REEL_AREA_X + r * (REEL_W + REEL_GAP);
+                const cellY = baseY + row * SYMBOL_H;
+                const cell = bonusGrid[r][row];
+
+                if (cell) {
+                    // Locked fireball with credit value
+                    drawBonusFireball(cell, cellX, cellY, REEL_W, SYMBOL_H, r, row);
+                } else if (bonusPhase !== 'TRIGGER') {
+                    // Empty cell (only drawn during active bonus, not trigger)
+                    if (bonusPhase === 'SPINNING') {
+                        // Orange shimmer effect during respin animation
+                        const shimmer = 0.12 + 0.08 * Math.sin(bonusAnimTimer * 0.3 + r * 1.5 + row);
+                        ctx.fillStyle = `rgba(255, 102, 0, ${shimmer})`;
+                    } else {
+                        ctx.fillStyle = '#0a0a1a';
+                    }
+                    roundRect(cellX + SYMBOL_PAD, cellY + SYMBOL_PAD,
+                             REEL_W - SYMBOL_PAD * 2, SYMBOL_H - SYMBOL_PAD * 2, 8, true);
+                    ctx.strokeStyle = '#333355';
+                    ctx.lineWidth = 1;
+                    roundRect(cellX + SYMBOL_PAD, cellY + SYMBOL_PAD,
+                             REEL_W - SYMBOL_PAD * 2, SYMBOL_H - SYMBOL_PAD * 2, 8, false, true);
+                }
+            }
+        }
+
+        // "HOLD & SPIN" title above the reels
+        if (bonusPhase !== 'AWARD') {
+            ctx.save();
+            ctx.fillStyle = '#FF6600';
+            ctx.font = 'bold 42px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.shadowColor = '#FF6600';
+            ctx.shadowBlur = 20;
+            ctx.fillText('HOLD & SPIN', MACHINE_X + MACHINE_W / 2, REEL_AREA_Y - 6);
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+
+        // Big flashing "HOLD & SPIN!" during trigger announcement
+        if (bonusPhase === 'TRIGGER') {
+            const pulse = 0.5 + 0.5 * Math.sin(bonusAnimTimer * 0.15);
+            ctx.save();
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = '#FF6600';
+            ctx.font = 'bold 72px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = '#FF6600';
+            ctx.shadowBlur = 40;
+            ctx.fillText('HOLD & SPIN!', MACHINE_X + MACHINE_W / 2, REEL_AREA_Y + REEL_H / 2);
+            ctx.shadowBlur = 0;
+            ctx.restore();
+        }
+
+        // Respin counter below the grid
+        if (bonusPhase === 'ACTIVE' || bonusPhase === 'SPINNING') {
+            const counterY = baseY + NUM_ROWS * SYMBOL_H + 15;
+            ctx.save();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 26px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText('RESPINS: ' + bonusRespins, MACHINE_X + MACHINE_W / 2, counterY);
+            ctx.restore();
+        }
+
+        // Running total during active bonus
+        if (bonusPhase === 'ACTIVE' || bonusPhase === 'SPINNING') {
+            const totalY = baseY + NUM_ROWS * SYMBOL_H + 50;
+            ctx.save();
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 22px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText('BONUS TOTAL: ' + formatCredits(bonusTotalWin), MACHINE_X + MACHINE_W / 2, totalY);
+            ctx.restore();
+        }
+
+        // Award phase - big golden total with count-up animation
+        if (bonusPhase === 'AWARD') {
+            const progress = Math.min(bonusAnimTimer / 90, 1); // count up over 1.5 seconds
+            const displayValue = Math.floor(bonusTotalWin * progress);
+
+            ctx.save();
+
+            // Dark box behind the award text
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            roundRect(MACHINE_X + MACHINE_W / 2 - 220, REEL_AREA_Y + REEL_H / 2 - 70, 440, 140, 15, true);
+            ctx.strokeStyle = '#FFD70088';
+            ctx.lineWidth = 2;
+            roundRect(MACHINE_X + MACHINE_W / 2 - 220, REEL_AREA_Y + REEL_H / 2 - 70, 440, 140, 15, false, true);
+
+            // "BONUS WIN" label
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 32px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('BONUS WIN', MACHINE_X + MACHINE_W / 2, REEL_AREA_Y + REEL_H / 2 - 28);
+
+            // Credit total with golden glow
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 25;
+            ctx.font = 'bold 52px Arial, sans-serif';
+            ctx.fillText(formatCredits(displayValue), MACHINE_X + MACHINE_W / 2, REEL_AREA_Y + REEL_H / 2 + 28);
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+        }
+    }
+
+    // --- Bonus Sound Effects ---
+
+    // Dramatic ascending fanfare when bonus triggers
+    function playBonusTriggerSound() {
+        if (!audioCtx) return;
+        const notes = [262, 330, 392, 523, 660, 784]; // C4 through G5 - rising excitement
+        notes.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const startTime = audioCtx.currentTime + i * 0.08;
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.25, startTime + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+            osc.start(startTime);
+            osc.stop(startTime + 0.3);
+        });
+    }
+
+    // Bright "ding" when a new fireball locks during respin
+    function playBonusLandSound() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = 880; // A5 - bright and clear
+        const now = audioCtx.currentTime;
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc.start(now);
+        osc.stop(now + 0.5);
     }
 
     // ===== SOUND EFFECTS =====
@@ -1056,36 +1533,53 @@
     const SPIN_BTN_H = 70;
 
     function drawSpinButton() {
-        // Button glow when not spinning
-        if (!isSpinning) {
-            ctx.shadowColor = '#44FF44';
+        // Figure out if the button is pressable and what it should say
+        const isInBonus = gameMode === 'HOLD_AND_SPIN';
+        const canPress = (!isSpinning && !isInBonus) ||
+                         (isInBonus && bonusPhase === 'ACTIVE');
+        let btnLabel = 'SPIN';
+        if (isInBonus) {
+            btnLabel = bonusPhase === 'ACTIVE' ? 'RESPIN' :
+                       bonusPhase === 'SPINNING' ? 'SPINNING...' : 'HOLD & SPIN';
+        } else if (isSpinning) {
+            btnLabel = 'SPINNING...';
+        }
+
+        // Button glow when pressable
+        if (canPress) {
+            ctx.shadowColor = isInBonus ? '#FF6600' : '#44FF44';
             ctx.shadowBlur = 20;
         }
 
-        // Button background
+        // Button background - orange during bonus, green during normal play
         const btnGrad = ctx.createLinearGradient(0, SPIN_BTN_Y, 0, SPIN_BTN_Y + SPIN_BTN_H);
-        if (isSpinning) {
+        if (canPress) {
+            if (isInBonus) {
+                btnGrad.addColorStop(0, '#CC5500');
+                btnGrad.addColorStop(1, '#883300');
+            } else {
+                btnGrad.addColorStop(0, '#22AA22');
+                btnGrad.addColorStop(1, '#117711');
+            }
+        } else {
             btnGrad.addColorStop(0, '#333333');
             btnGrad.addColorStop(1, '#222222');
-        } else {
-            btnGrad.addColorStop(0, '#22AA22');
-            btnGrad.addColorStop(1, '#117711');
         }
         ctx.fillStyle = btnGrad;
         roundRect(SPIN_BTN_X, SPIN_BTN_Y, SPIN_BTN_W, SPIN_BTN_H, 12, true);
         ctx.shadowBlur = 0;
 
         // Button border
-        ctx.strokeStyle = isSpinning ? '#555555' : '#44FF44';
+        ctx.strokeStyle = canPress ? (isInBonus ? '#FF6600' : '#44FF44') : '#555555';
         ctx.lineWidth = 2;
         roundRect(SPIN_BTN_X, SPIN_BTN_Y, SPIN_BTN_W, SPIN_BTN_H, 12, false, true);
 
         // Button text
-        ctx.fillStyle = isSpinning ? '#888888' : '#FFFFFF';
+        ctx.fillStyle = canPress ? '#FFFFFF' : '#888888';
         ctx.font = 'bold 36px Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(isSpinning ? 'SPINNING...' : 'SPIN', SPIN_BTN_X + SPIN_BTN_W / 2, SPIN_BTN_Y + SPIN_BTN_H / 2);
+        ctx.fillText(btnLabel, SPIN_BTN_X + SPIN_BTN_W / 2, SPIN_BTN_Y + SPIN_BTN_H / 2);
     }
 
     // ===== CLICK HANDLING =====
@@ -1185,6 +1679,7 @@
             isSpinning = false;
             updateReelGrid();
             checkWins(); // look for winning paylines
+            checkBonusTrigger(); // check if Hold and Spin bonus should trigger
         }
     }
 
@@ -1196,6 +1691,8 @@
         updateReels();
         // Update which win line is being highlighted
         updateWinDisplay();
+        // Update Hold and Spin bonus state machine
+        updateBonus();
 
         // Clear the entire canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1206,7 +1703,8 @@
         drawReels();
         drawLandingFlashes(); // white flash when each reel stops
         drawWinLines();       // glowing lines over winning paylines
-        drawPaylineMarkers();
+        drawBonusOverlay();   // Hold and Spin overlay (draws on top of reels when active)
+        if (gameMode !== 'HOLD_AND_SPIN') drawPaylineMarkers(); // hide markers during bonus
         drawBottomPanel();
         drawSpinButton();
 
