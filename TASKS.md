@@ -8,7 +8,7 @@
 - [x] Build 5-reel layout with 3 visible rows each
 - [x] Animate reel spinning with smooth start and stop
 - [x] Add spin button and credit display UI
-- [ ] Add win line highlight animations
+- [x] Add win line highlight animations
 - [ ] Add symbol landing effects and sound triggers
 
 ## Phase 2: Game Logic
