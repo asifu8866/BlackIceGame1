@@ -9,7 +9,7 @@
 - [x] Animate reel spinning with smooth start and stop
 - [x] Add spin button and credit display UI
 - [x] Add win line highlight animations
-- [ ] Add symbol landing effects and sound triggers
+- [x] Add symbol landing effects and sound triggers
 
 ## Phase 2: Game Logic
 > Math engine, win calculations, bonus mechanics
