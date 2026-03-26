@@ -133,6 +133,11 @@
         if (isSpinning) return; // can't spin while already spinning
         isSpinning = true;
 
+        // Clear any win display from the previous spin
+        activeWins = [];
+        showingWins = false;
+        winDisplayIndex = -1;
+
         // Randomize new target positions for each reel (where it will land)
         for (let r = 0; r < NUM_REELS; r++) {
             reels[r].spinning = true;
@@ -578,6 +583,175 @@
         }
     }
 
+    // ===== PAYLINE DEFINITIONS =====
+    // 10 paylines - each is an array of 5 row positions (0=top, 1=mid, 2=bot)
+    // These define the patterns players can win on
+    const PAYLINES = [
+        [1, 1, 1, 1, 1],  // Line 1: straight middle
+        [0, 0, 0, 0, 0],  // Line 2: straight top
+        [2, 2, 2, 2, 2],  // Line 3: straight bottom
+        [0, 1, 2, 1, 0],  // Line 4: V shape
+        [2, 1, 0, 1, 2],  // Line 5: inverted V
+        [0, 0, 1, 2, 2],  // Line 6: diagonal down
+        [2, 2, 1, 0, 0],  // Line 7: diagonal up
+        [1, 0, 0, 0, 1],  // Line 8: top hat
+        [1, 2, 2, 2, 1],  // Line 9: bottom hat
+        [1, 0, 1, 0, 1]   // Line 10: zigzag
+    ];
+
+    // Colors for each payline so they're easy to tell apart
+    const PAYLINE_COLORS = [
+        '#FF2222', '#FFD700', '#44FF44', '#FF8800', '#44DDFF',
+        '#FF44FF', '#88FF44', '#FF4488', '#44FFDD', '#FFFF44'
+    ];
+
+    // ===== WIN DETECTION =====
+    // After reels stop, check each payline for matching symbols
+    // Returns an array of winning lines with their details
+    let activeWins = [];       // list of winning paylines from last spin
+    let winDisplayTimer = 0;   // timer for cycling through win displays
+    let winDisplayIndex = -1;  // which win line is currently highlighted (-1 = show all)
+    let showingWins = false;   // true while win celebration is active
+    const WIN_CYCLE_TIME = 90; // frames to show each individual win line (about 1.5 seconds)
+
+    function checkWins() {
+        activeWins = [];
+        if (isSpinning) return;
+
+        for (let p = 0; p < PAYLINES.length; p++) {
+            const line = PAYLINES[p];
+
+            // Get the symbol on this payline for each reel
+            const lineSymbols = [];
+            for (let r = 0; r < NUM_REELS; r++) {
+                lineSymbols.push(reelGrid[r][line[r]]);
+            }
+
+            // Check for 3, 4, or 5 matching symbols from left to right
+            // WILD substitutes for anything except SEVEN
+            const firstSym = lineSymbols[0];
+            let matchCount = 1;
+
+            for (let r = 1; r < NUM_REELS; r++) {
+                const sym = lineSymbols[r];
+                const isWild = SYMBOLS[sym].name === 'WILD';
+                const firstIsWild = SYMBOLS[firstSym].name === 'WILD';
+
+                // Skip FIREBALL and BLANK - they don't count for line wins
+                if (SYMBOLS[firstSym].name === 'FIREBALL' || SYMBOLS[firstSym].name === 'BLANK') break;
+                if (SYMBOLS[sym].name === 'FIREBALL' || SYMBOLS[sym].name === 'BLANK') break;
+
+                // Match if same symbol, or if either is WILD (but WILD can't sub for SEVEN)
+                const sevenInvolved = SYMBOLS[firstSym].name === 'SEVEN' || SYMBOLS[sym].name === 'SEVEN';
+                if (sym === firstSym ||
+                    (isWild && !sevenInvolved) ||
+                    (firstIsWild && !sevenInvolved)) {
+                    matchCount++;
+                } else {
+                    break; // chain broken
+                }
+            }
+
+            // Need at least 3 in a row to win
+            if (matchCount >= 3) {
+                activeWins.push({
+                    paylineIndex: p,
+                    matchCount: matchCount,
+                    symbolIndex: firstSym
+                });
+            }
+        }
+
+        // Start the win display cycle if we have wins
+        if (activeWins.length > 0) {
+            showingWins = true;
+            winDisplayTimer = 0;
+            winDisplayIndex = -1; // start by showing all lines briefly
+        }
+    }
+
+    // Update the win display cycle timer each frame
+    function updateWinDisplay() {
+        if (!showingWins || activeWins.length === 0) return;
+
+        winDisplayTimer++;
+        if (winDisplayTimer >= WIN_CYCLE_TIME) {
+            winDisplayTimer = 0;
+            winDisplayIndex++;
+            // Loop back to showing all after cycling through each line
+            if (winDisplayIndex >= activeWins.length) {
+                winDisplayIndex = -1;
+            }
+        }
+    }
+
+    // ===== WIN LINE DRAWING =====
+    // Draw glowing lines across the reels for winning paylines
+    function drawWinLines() {
+        if (!showingWins || activeWins.length === 0) return;
+
+        const baseY = REEL_AREA_Y + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+
+        // Pulsing glow effect - oscillates brightness over time
+        const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 150);
+
+        // Decide which wins to draw this frame
+        const winsToDraw = winDisplayIndex === -1 ? activeWins : [activeWins[winDisplayIndex]];
+
+        for (const win of winsToDraw) {
+            const line = PAYLINES[win.paylineIndex];
+            const color = PAYLINE_COLORS[win.paylineIndex];
+
+            // Draw the connecting line through each reel position
+            ctx.save();
+            ctx.globalAlpha = pulse;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 6;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 20;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+
+            ctx.beginPath();
+            for (let r = 0; r < NUM_REELS; r++) {
+                const reelX = REEL_AREA_X + r * (REEL_W + REEL_GAP) + REEL_W / 2;
+                const symY = baseY + line[r] * SYMBOL_H + SYMBOL_H / 2;
+
+                if (r === 0) ctx.moveTo(reelX, symY);
+                else ctx.lineTo(reelX, symY);
+            }
+            ctx.stroke();
+
+            // Draw highlight boxes around winning symbols
+            for (let r = 0; r < win.matchCount; r++) {
+                const reelX = REEL_AREA_X + r * (REEL_W + REEL_GAP);
+                const symY = baseY + line[r] * SYMBOL_H;
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 15;
+                roundRect(reelX + SYMBOL_PAD + 2, symY + SYMBOL_PAD + 2,
+                          REEL_W - SYMBOL_PAD * 2 - 4, SYMBOL_H - SYMBOL_PAD * 2 - 4, 6, false, true);
+            }
+
+            ctx.restore();
+        }
+
+        // Draw win line label on the left margin
+        if (winDisplayIndex >= 0 && winDisplayIndex < activeWins.length) {
+            const win = activeWins[winDisplayIndex];
+            const line = PAYLINES[win.paylineIndex];
+            const color = PAYLINE_COLORS[win.paylineIndex];
+            const symY = baseY + line[0] * SYMBOL_H + SYMBOL_H / 2;
+
+            ctx.fillStyle = color;
+            ctx.font = 'bold 20px Arial, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('LINE ' + (win.paylineIndex + 1), REEL_AREA_X - 50, symY);
+        }
+    }
+
     // ===== UTILITY FUNCTIONS =====
 
     // Draw a rounded rectangle (used everywhere for that polished look)
@@ -739,6 +913,7 @@
         if (allStopped) {
             isSpinning = false;
             updateReelGrid();
+            checkWins(); // look for winning paylines
         }
     }
 
@@ -748,6 +923,8 @@
     function gameLoop() {
         // Update reel positions if spinning
         updateReels();
+        // Update which win line is being highlighted
+        updateWinDisplay();
 
         // Clear the entire canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -756,6 +933,7 @@
         drawMachineFrame();
         drawJackpotBar();
         drawReels();
+        drawWinLines();    // glowing lines over winning paylines
         drawPaylineMarkers();
         drawBottomPanel();
         drawSpinButton();
