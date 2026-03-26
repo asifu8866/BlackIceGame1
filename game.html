@@ -133,6 +133,10 @@
         if (isSpinning) return; // can't spin while already spinning
         isSpinning = true;
 
+        // Initialize audio on first spin (browser requires user gesture)
+        initAudio();
+        playSpinStartSound();
+
         // Clear any win display from the previous spin
         activeWins = [];
         showingWins = false;
@@ -583,6 +587,118 @@
         }
     }
 
+    // ===== SOUND EFFECTS =====
+    // Generated with Web Audio API - no audio files needed, works 100% offline
+    // AudioContext is created on first user interaction (browser requirement)
+    let audioCtx = null;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    // Play a short thud/click sound when a reel lands
+    function playReelStopSound(reelIndex) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        // Lower pitch for later reels - gives a satisfying cascade feel
+        osc.frequency.value = 120 - reelIndex * 8;
+        osc.type = 'sine';
+
+        // Quick punch: loud then instantly silent
+        const now = audioCtx.currentTime;
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+        osc.start(now);
+        osc.stop(now + 0.1);
+    }
+
+    // Play a short spin whoosh when reels start
+    function playSpinStartSound() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.type = 'sawtooth';
+        const now = audioCtx.currentTime;
+        // Rising pitch whoosh
+        osc.frequency.setValueAtTime(80, now);
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.2);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+        osc.start(now);
+        osc.stop(now + 0.25);
+    }
+
+    // Play a celebratory rising tone when a win is detected
+    function playWinSound() {
+        if (!audioCtx) return;
+        const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6 - major chord arpeggio
+        notes.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+
+            const startTime = audioCtx.currentTime + i * 0.1;
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.2, startTime + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+
+            osc.start(startTime);
+            osc.stop(startTime + 0.4);
+        });
+    }
+
+    // ===== LANDING FLASH EFFECTS =====
+    // White flash overlay on each reel when it lands
+    const landingFlashes = [];
+
+    // Trigger a flash on a specific reel
+    function triggerLandingFlash(reelIndex) {
+        landingFlashes.push({
+            reel: reelIndex,
+            alpha: 0.6,  // starting brightness (0-1)
+            decay: 0.88  // how fast it fades each frame
+        });
+    }
+
+    // Update and draw all active landing flashes
+    function drawLandingFlashes() {
+        const baseY = REEL_AREA_Y + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+
+        for (let i = landingFlashes.length - 1; i >= 0; i--) {
+            const flash = landingFlashes[i];
+            const reelX = REEL_AREA_X + flash.reel * (REEL_W + REEL_GAP);
+
+            // White glow overlay on the reel column
+            ctx.save();
+            ctx.globalAlpha = flash.alpha;
+            ctx.fillStyle = '#FFFFFF';
+            roundRect(reelX + SYMBOL_PAD, baseY + SYMBOL_PAD,
+                      REEL_W - SYMBOL_PAD * 2, NUM_ROWS * SYMBOL_H - SYMBOL_PAD * 2, 6, true);
+            ctx.restore();
+
+            // Fade out
+            flash.alpha *= flash.decay;
+            if (flash.alpha < 0.02) {
+                landingFlashes.splice(i, 1);
+            }
+        }
+    }
+
     // ===== PAYLINE DEFINITIONS =====
     // 10 paylines - each is an array of 5 row positions (0=top, 1=mid, 2=bot)
     // These define the patterns players can win on
@@ -667,6 +783,7 @@
             showingWins = true;
             winDisplayTimer = 0;
             winDisplayIndex = -1; // start by showing all lines briefly
+            playWinSound(); // celebratory rising tone
         }
     }
 
@@ -882,6 +999,9 @@
                     if (reel.bouncePhase === 0) {
                         reel.bouncePhase = 1;
                         reel.bounceBack = -12; // overshoot downward
+                        // Landing effects - flash and sound
+                        triggerLandingFlash(r);
+                        playReelStopSound(r);
                     }
                 }
             } else {
@@ -933,7 +1053,8 @@
         drawMachineFrame();
         drawJackpotBar();
         drawReels();
-        drawWinLines();    // glowing lines over winning paylines
+        drawLandingFlashes(); // white flash when each reel stops
+        drawWinLines();       // glowing lines over winning paylines
         drawPaylineMarkers();
         drawBottomPanel();
         drawSpinButton();
