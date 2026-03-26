@@ -1,0 +1,17 @@
+# Skip image files - no need to read these
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.webp
+*.ico
+
+# Skip audio files - no need to read these
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.aac
+*.m4a
