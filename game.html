@@ -213,7 +213,12 @@
     // Called when player presses the spin button
     function startSpin() {
         if (isSpinning) return; // can't spin while already spinning
+        if (credits < totalBet) return; // not enough credits to spin
         isSpinning = true;
+
+        // Deduct the bet from the player's balance
+        credits -= totalBet;
+        lastWin = 0;
 
         // Initialize audio on first spin (browser requires user gesture)
         initAudio();
@@ -608,7 +613,7 @@
         ctx.lineWidth = 2;
         roundRect(MACHINE_X + 30, panelY, MACHINE_W - 60, panelH, 10, false, true);
 
-        // Credit display
+        // Credit display - shows real player balance
         ctx.fillStyle = '#AAAACC';
         ctx.font = '22px Arial, sans-serif';
         ctx.textAlign = 'center';
@@ -616,23 +621,28 @@
         ctx.fillText('CREDITS', MACHINE_X + 250, panelY + 15);
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 42px Arial, sans-serif';
-        ctx.fillText('1,000', MACHINE_X + 250, panelY + 48);
+        ctx.fillText(formatCredits(credits), MACHINE_X + 250, panelY + 48);
 
-        // Bet display
+        // Bet display - shows current total bet
         ctx.fillStyle = '#AAAACC';
         ctx.font = '22px Arial, sans-serif';
         ctx.fillText('BET', MACHINE_X + MACHINE_W / 2, panelY + 15);
         ctx.fillStyle = '#FFD700';
         ctx.font = 'bold 42px Arial, sans-serif';
-        ctx.fillText('10', MACHINE_X + MACHINE_W / 2, panelY + 48);
+        ctx.fillText(formatCredits(totalBet), MACHINE_X + MACHINE_W / 2, panelY + 48);
 
-        // Win display
+        // Win display - shows last spin winnings (green glow when > 0)
         ctx.fillStyle = '#AAAACC';
         ctx.font = '22px Arial, sans-serif';
         ctx.fillText('WIN', MACHINE_X + MACHINE_W - 250, panelY + 15);
-        ctx.fillStyle = '#44FF44';
+        if (lastWin > 0) {
+            ctx.shadowColor = '#44FF44';
+            ctx.shadowBlur = 15;
+        }
+        ctx.fillStyle = lastWin > 0 ? '#44FF44' : '#666688';
         ctx.font = 'bold 42px Arial, sans-serif';
-        ctx.fillText('0', MACHINE_X + MACHINE_W - 250, panelY + 48);
+        ctx.fillText(formatCredits(lastWin), MACHINE_X + MACHINE_W - 250, panelY + 48);
+        ctx.shadowBlur = 0;
     }
 
     // Draw the jackpot displays at the top
@@ -667,6 +677,38 @@
             ctx.textBaseline = 'middle';
             ctx.fillText(jp.name + '  $' + jp.amount, bx + barW / 2, barY + 14);
         }
+    }
+
+    // ===== PAYTABLE =====
+    // How much each symbol pays for 3, 4, or 5 of a kind on a payline
+    // Values are multipliers of the bet-per-line
+    // Modeled after Fire Link by Light & Wonder
+    //
+    // Example: If bet is 10 credits across 10 lines (1 per line),
+    // and you hit 3 CHERRY on a line, you win 1 x 5 = 5 credits
+    const PAYTABLE = {
+        // Symbol name:    [3-of-a-kind, 4-of-a-kind, 5-of-a-kind]
+        'CHERRY':          [5,    15,    50],      // low value - hits often
+        'BAR':             [10,   30,    100],     // low-mid
+        'DOUBLE_BAR':      [15,   50,    200],     // mid
+        'TRIPLE_BAR':      [25,   75,    300],     // mid-high
+        'BELL':            [25,   75,    300],     // mid-high (same as triple bar)
+        'DIAMOND':         [50,   150,   500],     // high value
+        'SEVEN':           [100,  500,   2000],    // jackpot symbol - very rare, huge payout
+        'WILD':            [10,   50,    200]      // WILD line (all wilds) pays like DOUBLE_BAR
+        // FIREBALL and BLANK are not line-pay symbols
+    };
+
+    // ===== CREDIT SYSTEM =====
+    // Track the player's balance, current bet, and last win
+    let credits = 1000;      // starting balance
+    let betPerLine = 1;      // credits wagered on each payline
+    let totalBet = 10;       // betPerLine x 10 paylines (deducted each spin)
+    let lastWin = 0;         // total win from the most recent spin
+
+    // Format a number with commas for display (1000 -> "1,000")
+    function formatCredits(num) {
+        return num.toLocaleString();
     }
 
     // ===== SOUND EFFECTS =====
@@ -852,12 +894,39 @@
 
             // Need at least 3 in a row to win
             if (matchCount >= 3) {
+                // Look up the payout from the paytable
+                // Use the first non-WILD symbol to determine pay
+                let paySymbol = SYMBOLS[firstSym].name;
+                if (paySymbol === 'WILD') {
+                    // If the line starts with WILD, find the first real symbol
+                    for (let r = 1; r < matchCount; r++) {
+                        const sName = SYMBOLS[lineSymbols[r]].name;
+                        if (sName !== 'WILD') { paySymbol = sName; break; }
+                    }
+                }
+
+                const payEntry = PAYTABLE[paySymbol];
+                const payout = payEntry ? payEntry[matchCount - 3] * betPerLine : 0;
+
                 activeWins.push({
                     paylineIndex: p,
                     matchCount: matchCount,
-                    symbolIndex: firstSym
+                    symbolIndex: firstSym,
+                    paySymbol: paySymbol,
+                    payout: payout
                 });
             }
+        }
+
+        // Add up total win from all winning paylines
+        lastWin = 0;
+        for (const win of activeWins) {
+            lastWin += win.payout;
+        }
+
+        // Award winnings to the player's balance
+        if (lastWin > 0) {
+            credits += lastWin;
         }
 
         // Start the win display cycle if we have wins

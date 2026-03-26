@@ -15,7 +15,7 @@
 > Math engine, win calculations, bonus mechanics
 
 - [x] Build reel strip weight tables for 88%, 92%, and 96% RTP
-- [ ] Implement 10-payline win detection
+- [x] Implement 10-payline win detection
 - [ ] Create paytable with correct symbol values
 - [ ] Build Hold and Spin bonus trigger (every 80-120 spins)
 - [ ] Implement Fireball lock mechanic during Hold and Spin
