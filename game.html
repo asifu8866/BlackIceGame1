@@ -4,9 +4,503 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Black Ice Gaming - Game 1</title>
+    <style>
+        /* ===== FULL SCREEN DARK BACKGROUND ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        canvas { display: block; }
+    </style>
 </head>
 <body>
-    <!-- Black Ice Gaming - Game 1 -->
-    <!-- Everything lives in this one file -->
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+    /* =============================================================
+       BLACK ICE GAMING - GAME 1
+       Main game file - everything lives here
+       ============================================================= */
+
+    // ===== CANVAS SETUP =====
+    // The canvas is our drawing surface - like a digital whiteboard
+    // We size it to 1920x1080 to match the cabinet monitor
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1920;
+    canvas.height = 1080;
+
+    // Scale canvas to fit the browser window while keeping proportions
+    function resizeCanvas() {
+        const scaleX = window.innerWidth / canvas.width;
+        const scaleY = window.innerHeight / canvas.height;
+        const scale = Math.min(scaleX, scaleY);
+        canvas.style.width = (canvas.width * scale) + 'px';
+        canvas.style.height = (canvas.height * scale) + 'px';
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // ===== SYMBOL DEFINITIONS =====
+    // Each symbol has a name, display label, and colors from the design doc
+    const SYMBOLS = [
+        { name: 'CHERRY',     label: 'CHERRY',  color: '#FF2D2D', bgColor: '#4A0000' },
+        { name: 'BAR',        label: 'BAR',     color: '#4488FF', bgColor: '#001A4A' },
+        { name: 'DOUBLE_BAR', label: '2xBAR',   color: '#2255CC', bgColor: '#001040' },
+        { name: 'TRIPLE_BAR', label: '3xBAR',   color: '#1A3399', bgColor: '#000A30' },
+        { name: 'SEVEN',      label: '7',       color: '#FFD700', bgColor: '#4A3D00' },
+        { name: 'BELL',       label: 'BELL',    color: '#FFDD44', bgColor: '#4A4000' },
+        { name: 'DIAMOND',    label: 'DIAM',    color: '#00EEFF', bgColor: '#003A40' },
+        { name: 'WILD',       label: 'WILD',    color: '#CC44FF', bgColor: '#300050' },
+        { name: 'FIREBALL',   label: 'FIRE',    color: '#FF6600', bgColor: '#4A2000' },
+        { name: 'BLANK',      label: '',        color: '#333333', bgColor: '#111111' }
+    ];
+
+    // ===== REEL LAYOUT =====
+    // 5 reels, 3 visible rows each - this is what the player sees
+    // Each reel gets a random set of symbols for now (placeholder)
+    const NUM_REELS = 5;
+    const NUM_ROWS = 3;
+
+    // Generate a random symbol index (placeholder until real math engine)
+    function randomSymbol() {
+        // Don't show BLANK too often in the demo - skip index 9 most of the time
+        let idx = Math.floor(Math.random() * SYMBOLS.length);
+        if (idx === 9 && Math.random() > 0.2) idx = Math.floor(Math.random() * 9);
+        return idx;
+    }
+
+    // Fill the visible grid with random symbols
+    const reelGrid = [];
+    for (let r = 0; r < NUM_REELS; r++) {
+        reelGrid[r] = [];
+        for (let row = 0; row < NUM_ROWS; row++) {
+            reelGrid[r][row] = randomSymbol();
+        }
+    }
+
+    // ===== LAYOUT CONSTANTS =====
+    // All measurements in pixels on the 1920x1080 canvas
+
+    // Machine frame
+    const MACHINE_X = 210;          // left edge of the machine body
+    const MACHINE_Y = 40;           // top edge
+    const MACHINE_W = 1500;         // width of the machine body
+    const MACHINE_H = 1000;         // height of the machine body
+
+    // Reel window - the area where symbols are visible
+    const REEL_AREA_X = 310;        // left edge of the reel window
+    const REEL_AREA_Y = 230;        // top edge of the reel window (below jackpot bar)
+    const REEL_W = 220;             // width of each reel column
+    const REEL_H = 480;             // total height of the reel window
+    const REEL_GAP = 16;            // gap between reels
+    const SYMBOL_H = 150;           // height of each symbol cell
+    const SYMBOL_PAD = 8;           // padding inside each symbol cell
+
+    // ===== DRAWING FUNCTIONS =====
+
+    // Draw the slot machine cabinet frame
+    function drawMachineFrame() {
+        // Outer cabinet body - dark metallic
+        ctx.fillStyle = '#1a1a2e';
+        roundRect(MACHINE_X, MACHINE_Y, MACHINE_W, MACHINE_H, 20, true);
+
+        // Inner bevel - gives depth
+        ctx.fillStyle = '#12122a';
+        roundRect(MACHINE_X + 8, MACHINE_Y + 8, MACHINE_W - 16, MACHINE_H - 16, 16, true);
+
+        // Top banner area - where the game name goes
+        const bannerGrad = ctx.createLinearGradient(0, MACHINE_Y + 20, 0, MACHINE_Y + 160);
+        bannerGrad.addColorStop(0, '#1a0a30');
+        bannerGrad.addColorStop(0.5, '#2a1050');
+        bannerGrad.addColorStop(1, '#1a0a30');
+        ctx.fillStyle = bannerGrad;
+        roundRect(MACHINE_X + 30, MACHINE_Y + 20, MACHINE_W - 60, 140, 12, true);
+
+        // Game title
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 64px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 20;
+        ctx.fillText('BLACK ICE', MACHINE_X + MACHINE_W / 2, MACHINE_Y + 90);
+        ctx.shadowBlur = 0;
+
+        // Reel window border - glowing frame around the reels
+        const totalReelW = (REEL_W * NUM_REELS) + (REEL_GAP * (NUM_REELS - 1));
+        const borderPad = 20;
+        const borderX = REEL_AREA_X - borderPad;
+        const borderY = REEL_AREA_Y - borderPad;
+        const borderW = totalReelW + borderPad * 2;
+        const borderH = REEL_H + borderPad * 2;
+
+        // Outer glow
+        ctx.shadowColor = '#4400AA';
+        ctx.shadowBlur = 30;
+        ctx.strokeStyle = '#6622CC';
+        ctx.lineWidth = 4;
+        roundRect(borderX, borderY, borderW, borderH, 10, false, true);
+        ctx.shadowBlur = 0;
+
+        // Inner border
+        ctx.strokeStyle = '#8844EE';
+        ctx.lineWidth = 2;
+        roundRect(borderX + 4, borderY + 4, borderW - 8, borderH - 8, 8, false, true);
+
+        // Dark background behind reels
+        ctx.fillStyle = '#050510';
+        roundRect(borderX + 6, borderY + 6, borderW - 12, borderH - 12, 6, true);
+    }
+
+    // Draw a single symbol in its cell
+    function drawSymbol(symbolIndex, x, y, w, h) {
+        const sym = SYMBOLS[symbolIndex];
+
+        // Symbol background tile
+        const tileGrad = ctx.createLinearGradient(x, y, x, y + h);
+        tileGrad.addColorStop(0, sym.bgColor);
+        tileGrad.addColorStop(0.5, lightenColor(sym.bgColor, 30));
+        tileGrad.addColorStop(1, sym.bgColor);
+        ctx.fillStyle = tileGrad;
+        roundRect(x + SYMBOL_PAD, y + SYMBOL_PAD, w - SYMBOL_PAD * 2, h - SYMBOL_PAD * 2, 8, true);
+
+        // Symbol border
+        ctx.strokeStyle = sym.color + '66';
+        ctx.lineWidth = 2;
+        roundRect(x + SYMBOL_PAD, y + SYMBOL_PAD, w - SYMBOL_PAD * 2, h - SYMBOL_PAD * 2, 8, false, true);
+
+        // Skip drawing text for BLANK symbols
+        if (sym.name === 'BLANK') return;
+
+        // Draw the symbol icon shape
+        const cx = x + w / 2;
+        const cy = y + h / 2 - 10;
+        drawSymbolIcon(sym, cx, cy);
+
+        // Symbol label text below the icon
+        ctx.fillStyle = sym.color;
+        ctx.font = 'bold 18px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(sym.label, cx, cy + 40);
+    }
+
+    // Draw a simple icon shape for each symbol type
+    function drawSymbolIcon(sym, cx, cy) {
+        ctx.save();
+        ctx.shadowColor = sym.color;
+        ctx.shadowBlur = 12;
+
+        switch (sym.name) {
+            case 'CHERRY':
+                // Two circles with stems
+                ctx.fillStyle = sym.color;
+                ctx.beginPath();
+                ctx.arc(cx - 14, cy + 8, 16, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(cx + 14, cy + 8, 16, 0, Math.PI * 2);
+                ctx.fill();
+                // Stems
+                ctx.strokeStyle = '#44AA22';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(cx - 14, cy - 8);
+                ctx.quadraticCurveTo(cx, cy - 30, cx + 14, cy - 8);
+                ctx.stroke();
+                break;
+
+            case 'BAR':
+            case 'DOUBLE_BAR':
+            case 'TRIPLE_BAR':
+                // Horizontal bar(s)
+                ctx.fillStyle = sym.color;
+                const barCount = sym.name === 'BAR' ? 1 : sym.name === 'DOUBLE_BAR' ? 2 : 3;
+                const barH = 12;
+                const barW = 60;
+                const totalH = barCount * barH + (barCount - 1) * 6;
+                const startY = cy - totalH / 2;
+                for (let i = 0; i < barCount; i++) {
+                    const by = startY + i * (barH + 6);
+                    roundRect(cx - barW / 2, by, barW, barH, 3, true);
+                }
+                break;
+
+            case 'SEVEN':
+                // Big bold 7
+                ctx.fillStyle = sym.color;
+                ctx.font = 'bold 72px Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('7', cx, cy);
+                break;
+
+            case 'BELL':
+                // Bell shape
+                ctx.fillStyle = sym.color;
+                ctx.beginPath();
+                ctx.moveTo(cx - 24, cy + 12);
+                ctx.quadraticCurveTo(cx - 24, cy - 24, cx, cy - 28);
+                ctx.quadraticCurveTo(cx + 24, cy - 24, cx + 24, cy + 12);
+                ctx.lineTo(cx - 24, cy + 12);
+                ctx.fill();
+                // Clapper
+                ctx.beginPath();
+                ctx.arc(cx, cy + 18, 6, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+
+            case 'DIAMOND':
+                // Diamond shape
+                ctx.fillStyle = sym.color;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - 28);
+                ctx.lineTo(cx + 24, cy);
+                ctx.lineTo(cx, cy + 28);
+                ctx.lineTo(cx - 24, cy);
+                ctx.closePath();
+                ctx.fill();
+                break;
+
+            case 'WILD':
+                // Star burst for WILD
+                ctx.fillStyle = sym.color;
+                ctx.beginPath();
+                for (let i = 0; i < 10; i++) {
+                    const angle = (i * Math.PI * 2) / 10 - Math.PI / 2;
+                    const radius = i % 2 === 0 ? 28 : 14;
+                    const px = cx + Math.cos(angle) * radius;
+                    const py = cy + Math.sin(angle) * radius;
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
+                break;
+
+            case 'FIREBALL':
+                // Flame shape
+                ctx.fillStyle = sym.color;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - 30);
+                ctx.quadraticCurveTo(cx + 20, cy - 10, cx + 16, cy + 8);
+                ctx.quadraticCurveTo(cx + 10, cy + 0, cx + 8, cy + 16);
+                ctx.quadraticCurveTo(cx, cy + 24, cx - 8, cy + 16);
+                ctx.quadraticCurveTo(cx - 10, cy + 0, cx - 16, cy + 8);
+                ctx.quadraticCurveTo(cx - 20, cy - 10, cx, cy - 30);
+                ctx.fill();
+                // Inner flame
+                ctx.fillStyle = '#FFDD00';
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - 14);
+                ctx.quadraticCurveTo(cx + 10, cy, cx + 6, cy + 10);
+                ctx.quadraticCurveTo(cx, cy + 16, cx - 6, cy + 10);
+                ctx.quadraticCurveTo(cx - 10, cy, cx, cy - 14);
+                ctx.fill();
+                break;
+        }
+
+        ctx.restore();
+    }
+
+    // Draw all 5 reels with their 3 visible symbols each
+    function drawReels() {
+        for (let r = 0; r < NUM_REELS; r++) {
+            const reelX = REEL_AREA_X + r * (REEL_W + REEL_GAP);
+
+            // Reel column background
+            ctx.fillStyle = '#0a0a1a';
+            roundRect(reelX, REEL_AREA_Y, REEL_W, REEL_H, 4, true);
+
+            // Subtle reel divider lines
+            if (r < NUM_REELS - 1) {
+                ctx.strokeStyle = '#222244';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(reelX + REEL_W + REEL_GAP / 2, REEL_AREA_Y + 10);
+                ctx.lineTo(reelX + REEL_W + REEL_GAP / 2, REEL_AREA_Y + REEL_H - 10);
+                ctx.stroke();
+            }
+
+            // Draw each symbol in the reel
+            for (let row = 0; row < NUM_ROWS; row++) {
+                const symY = REEL_AREA_Y + row * SYMBOL_H + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+                drawSymbol(reelGrid[r][row], reelX, symY, REEL_W, SYMBOL_H);
+            }
+
+            // Row divider lines between symbols
+            for (let row = 1; row < NUM_ROWS; row++) {
+                const lineY = REEL_AREA_Y + row * SYMBOL_H + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+                ctx.strokeStyle = '#333355';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(reelX + 10, lineY);
+                ctx.lineTo(reelX + REEL_W - 10, lineY);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // Draw the payline indicator arrows on the left side
+    function drawPaylineMarkers() {
+        const markerX = REEL_AREA_X - 40;
+        const rowLabels = ['TOP', 'MID', 'BOT'];
+        const rowColors = ['#FF4444', '#FFD700', '#44FF44'];
+
+        for (let row = 0; row < NUM_ROWS; row++) {
+            const symY = REEL_AREA_Y + row * SYMBOL_H + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+            const cy = symY + SYMBOL_H / 2;
+
+            // Arrow triangle
+            ctx.fillStyle = rowColors[row];
+            ctx.beginPath();
+            ctx.moveTo(markerX, cy - 12);
+            ctx.lineTo(markerX + 18, cy);
+            ctx.lineTo(markerX, cy + 12);
+            ctx.closePath();
+            ctx.fill();
+
+            // Mirror arrow on right side
+            const totalReelW = (REEL_W * NUM_REELS) + (REEL_GAP * (NUM_REELS - 1));
+            const rightX = REEL_AREA_X + totalReelW + 22;
+            ctx.beginPath();
+            ctx.moveTo(rightX + 18, cy - 12);
+            ctx.lineTo(rightX, cy);
+            ctx.lineTo(rightX + 18, cy + 12);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+
+    // Draw the bottom panel with credits and bet info
+    function drawBottomPanel() {
+        const panelY = REEL_AREA_Y + REEL_H + 50;
+        const panelH = 120;
+
+        // Panel background
+        const panelGrad = ctx.createLinearGradient(0, panelY, 0, panelY + panelH);
+        panelGrad.addColorStop(0, '#1a0a30');
+        panelGrad.addColorStop(1, '#0a0515');
+        ctx.fillStyle = panelGrad;
+        roundRect(MACHINE_X + 30, panelY, MACHINE_W - 60, panelH, 10, true);
+
+        // Panel border
+        ctx.strokeStyle = '#6622CC44';
+        ctx.lineWidth = 2;
+        roundRect(MACHINE_X + 30, panelY, MACHINE_W - 60, panelH, 10, false, true);
+
+        // Credit display
+        ctx.fillStyle = '#AAAACC';
+        ctx.font = '22px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('CREDITS', MACHINE_X + 250, panelY + 15);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 42px Arial, sans-serif';
+        ctx.fillText('1,000', MACHINE_X + 250, panelY + 48);
+
+        // Bet display
+        ctx.fillStyle = '#AAAACC';
+        ctx.font = '22px Arial, sans-serif';
+        ctx.fillText('BET', MACHINE_X + MACHINE_W / 2, panelY + 15);
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 42px Arial, sans-serif';
+        ctx.fillText('10', MACHINE_X + MACHINE_W / 2, panelY + 48);
+
+        // Win display
+        ctx.fillStyle = '#AAAACC';
+        ctx.font = '22px Arial, sans-serif';
+        ctx.fillText('WIN', MACHINE_X + MACHINE_W - 250, panelY + 15);
+        ctx.fillStyle = '#44FF44';
+        ctx.font = 'bold 42px Arial, sans-serif';
+        ctx.fillText('0', MACHINE_X + MACHINE_W - 250, panelY + 48);
+    }
+
+    // Draw the jackpot displays at the top
+    function drawJackpotBar() {
+        const jackpots = [
+            { name: 'MEGA',  amount: '10,000', color: '#FF2222' },
+            { name: 'MAJOR', amount: '1,000',  color: '#FFD700' },
+            { name: 'MINOR', amount: '200',    color: '#44BBFF' },
+            { name: 'MINI',  amount: '50',     color: '#44FF44' }
+        ];
+
+        const barY = MACHINE_Y + 168;
+        const barW = (MACHINE_W - 100) / 4;
+
+        for (let i = 0; i < jackpots.length; i++) {
+            const jp = jackpots[i];
+            const bx = MACHINE_X + 40 + i * barW;
+
+            // Jackpot box background
+            ctx.fillStyle = '#0a0a20';
+            roundRect(bx + 4, barY, barW - 8, 28, 6, true);
+
+            // Jackpot box border glow
+            ctx.strokeStyle = jp.color + '88';
+            ctx.lineWidth = 1;
+            roundRect(bx + 4, barY, barW - 8, 28, 6, false, true);
+
+            // Jackpot label and amount
+            ctx.fillStyle = jp.color;
+            ctx.font = 'bold 16px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(jp.name + '  $' + jp.amount, bx + barW / 2, barY + 14);
+        }
+    }
+
+    // ===== UTILITY FUNCTIONS =====
+
+    // Draw a rounded rectangle (used everywhere for that polished look)
+    function roundRect(x, y, w, h, r, fill, stroke) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h);
+        ctx.arcTo(x, y + h, x, y + h - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        if (fill) ctx.fill();
+        if (stroke) ctx.stroke();
+    }
+
+    // Make a color lighter by a given amount (for gradient effects)
+    function lightenColor(hex, amount) {
+        const num = parseInt(hex.replace('#', ''), 16);
+        const r = Math.min(255, (num >> 16) + amount);
+        const g = Math.min(255, ((num >> 8) & 0x00FF) + amount);
+        const b = Math.min(255, (num & 0x0000FF) + amount);
+        return '#' + (r << 16 | g << 8 | b).toString(16).padStart(6, '0');
+    }
+
+    // ===== MAIN DRAW =====
+    // This draws everything on screen once
+    function draw() {
+        // Clear the entire canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw each layer from back to front
+        drawMachineFrame();
+        drawJackpotBar();
+        drawReels();
+        drawPaylineMarkers();
+        drawBottomPanel();
+    }
+
+    // Draw the initial screen
+    draw();
+
+    </script>
 </body>
 </html>
