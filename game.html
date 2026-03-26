@@ -65,24 +65,106 @@
     // 5 reels, 3 visible rows each - this is what the player sees
     const NUM_REELS = 5;
     const NUM_ROWS = 3;
-    const REEL_STRIP_LENGTH = 30; // how many symbols on each virtual reel strip
 
-    // Generate a random symbol index (placeholder until real math engine)
-    function randomSymbol() {
-        // Don't show BLANK too often in the demo - skip index 9 most of the time
-        let idx = Math.floor(Math.random() * SYMBOLS.length);
-        if (idx === 9 && Math.random() > 0.2) idx = Math.floor(Math.random() * 9);
-        return idx;
+    // ===== RTP SETTING =====
+    // Operator selects one of three Return To Player percentages
+    // This controls which reel strips are used
+    // 88 = tighter hold (12% profit), 92 = medium, 96 = loose (4% profit)
+    let currentRTP = 92; // default to medium - operator changes in settings menu
+
+    // ===== REEL STRIP WEIGHT TABLES =====
+    // These are the heart of the game math. Each reel strip is a carefully
+    // designed sequence of symbols. The number of times each symbol appears
+    // on each reel determines how often winning combinations line up.
+    //
+    // Symbol index reference:
+    // 0=CHERRY, 1=BAR, 2=DOUBLE_BAR, 3=TRIPLE_BAR, 4=SEVEN,
+    // 5=BELL, 6=DIAMOND, 7=WILD, 8=FIREBALL, 9=BLANK
+    //
+    // Design targets (modeled after Fire Link):
+    // - Hit frequency: ~32% (one in three spins wins something)
+    // - Volatility: Medium (frequent small wins + rare big wins)
+    // - CHERRY appears most often (low value, high frequency)
+    // - SEVEN is rare (high value)
+    // - WILD is scarce but impactful (substitutes for all except SEVEN)
+    // - FIREBALL appears enough to trigger Hold and Spin every 80-120 spins
+    // - BLANK fills gaps to control hit frequency
+    //
+    // Each reel has 32 stops. With 5 reels that gives us 32^5 = 33,554,432
+    // possible combinations per spin - enough resolution for precise RTP.
+
+    // ----- 88% RTP STRIPS (tighter - house keeps 12%) -----
+    // Fewer high-value symbols, more blanks, less WILD
+    const STRIPS_88 = [
+        // Reel 1
+        [0,9,1,9,0,5,9,2,9,0,8,9,3,9,5,9,0,1,9,6,9,0,9,2,9,4,9,0,7,9,1,9],
+        // Reel 2
+        [9,0,9,1,0,9,5,9,2,9,0,9,3,9,8,0,9,1,9,6,9,0,9,5,9,2,9,0,9,1,9,4],
+        // Reel 3
+        [0,9,5,9,1,9,0,9,2,9,8,9,0,9,3,9,1,9,0,9,6,9,5,9,0,9,2,9,1,9,0,9],
+        // Reel 4
+        [9,0,9,1,9,5,0,9,2,9,0,9,1,9,3,9,8,9,0,9,6,9,0,9,5,9,1,9,0,9,2,9],
+        // Reel 5
+        [0,9,1,9,5,9,0,9,2,9,0,9,1,9,0,9,3,9,8,9,6,9,0,9,5,9,1,9,4,9,7,9]
+    ];
+
+    // ----- 92% RTP STRIPS (medium - house keeps 8%) -----
+    // Balanced mix - more cherries and wilds than 88%, fewer blanks
+    const STRIPS_92 = [
+        // Reel 1
+        [0,9,1,0,5,9,2,0,9,8,3,9,0,5,9,1,0,9,6,9,0,2,9,7,0,9,4,1,9,0,5,9],
+        // Reel 2
+        [9,0,1,9,0,5,9,2,0,9,0,3,9,8,0,9,1,5,9,0,6,9,0,2,9,1,0,9,7,0,9,4],
+        // Reel 3
+        [0,5,9,1,0,9,2,0,9,8,0,9,3,1,9,0,5,9,0,6,9,1,0,9,2,5,9,0,7,9,0,9],
+        // Reel 4
+        [9,0,1,5,9,0,2,9,0,9,3,0,9,8,1,9,0,5,9,6,0,9,0,2,9,1,0,9,5,0,9,7],
+        // Reel 5
+        [0,9,1,0,5,9,0,2,9,0,1,9,8,0,9,3,5,9,0,6,9,1,0,9,4,0,7,9,5,2,0,9]
+    ];
+
+    // ----- 96% RTP STRIPS (loose - house keeps 4%) -----
+    // More high-value symbols, more WILDs, fewer blanks, CHERRY-heavy
+    const STRIPS_96 = [
+        // Reel 1
+        [0,1,0,5,9,2,0,7,0,8,3,0,5,9,1,0,6,9,0,2,5,0,9,4,1,0,7,5,0,9,1,0],
+        // Reel 2
+        [0,1,0,5,2,9,0,0,3,8,0,5,1,9,0,6,0,2,9,0,5,1,0,7,0,4,9,0,5,0,1,9],
+        // Reel 3
+        [0,5,1,0,2,9,0,8,0,3,5,0,1,6,9,0,5,0,2,7,0,1,9,0,5,0,9,1,0,5,0,9],
+        // Reel 4
+        [0,1,5,0,2,0,9,3,0,8,5,0,1,9,0,6,0,5,2,0,7,1,9,0,5,0,9,1,0,5,0,4],
+        // Reel 5
+        [0,1,0,5,2,0,9,0,8,3,0,5,1,0,6,9,0,7,5,0,2,1,0,4,9,0,5,7,0,1,5,0]
+    ];
+
+    // Get the active reel strips based on current RTP setting
+    function getActiveStrips() {
+        if (currentRTP === 88) return STRIPS_88;
+        if (currentRTP === 96) return STRIPS_96;
+        return STRIPS_92; // default
     }
 
-    // ===== REEL STRIPS =====
-    // Each reel has a long strip of symbols it scrolls through
-    // Think of it like a belt of symbols wrapped around a cylinder
-    const reelStrips = [];
-    for (let r = 0; r < NUM_REELS; r++) {
-        reelStrips[r] = [];
-        for (let i = 0; i < REEL_STRIP_LENGTH; i++) {
-            reelStrips[r][i] = randomSymbol();
+    // Copy the active strips into the working reel strip arrays
+    let reelStrips = [];
+    let REEL_STRIP_LENGTH = 32;
+
+    function loadReelStrips() {
+        const strips = getActiveStrips();
+        reelStrips = [];
+        for (let r = 0; r < NUM_REELS; r++) {
+            reelStrips[r] = strips[r].slice(); // copy so we don't modify originals
+        }
+        REEL_STRIP_LENGTH = reelStrips[0].length;
+    }
+    loadReelStrips(); // load the default strips on startup
+
+    // ===== RTP SWITCHING =====
+    // Call this to change the RTP (will take effect on next spin)
+    function setRTP(rtp) {
+        if (rtp === 88 || rtp === 92 || rtp === 96) {
+            currentRTP = rtp;
+            loadReelStrips();
         }
     }
 
