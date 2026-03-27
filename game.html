@@ -3395,8 +3395,27 @@
             };
         });
 
-        console.log('=== BLACK ICE GAME MATH SIMULATION ===');
-        console.log('Spins per RTP setting: ' + numSpins);
+        console.log('========================================');
+        console.log('  BLACK ICE GAME MATH SIMULATION');
+        console.log('  Spins per RTP setting: ' + numSpins.toLocaleString());
+        console.log('========================================');
+        for (const key in results) {
+            const r = results[key];
+            const pass = Math.abs(parseFloat(r.actualRTP) - parseFloat(r.targetRTP)) < 2;
+            console.log('');
+            console.log('  ' + key + ' Target:');
+            console.log('    Actual RTP:    ' + r.actualRTP + (pass ? ' ✓' : ' ✗ OUT OF RANGE'));
+            console.log('    Hit Frequency: ' + r.hitFrequency);
+            console.log('    Bonus Rate:    1 per ' + r.avgSpinsBetweenBonus + ' spins');
+            console.log('    Win Spins:     ' + r.winSpins.toLocaleString() + ' / ' + r.spins.toLocaleString());
+            console.log('    Total Wagered: ' + r.totalWagered.toLocaleString());
+            console.log('    Total Paid:    ' + r.totalPaid.toLocaleString());
+        }
+        console.log('');
+        console.log('========================================');
+        console.log('  GLI Target: RTP within ±2% of setting');
+        console.log('  Hit Freq Target: 28-36% (medium volatility)');
+        console.log('========================================');
         console.table(results);
         return results;
     }
