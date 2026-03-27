@@ -38,10 +38,10 @@
 ## Phase 4: Multi-Theme
 > Game 2, Game 3, theme selection menu
 
-- [ ] Build theme selection menu screen
-- [ ] Create Game 2 theme with new symbol set
-- [ ] Create Game 3 theme with new symbol set
-- [ ] Shared math engine across all themes
+- [x] Build theme selection menu screen
+- [x] Create Game 2 theme with new symbol set
+- [x] Create Game 3 theme with new symbol set
+- [x] Shared math engine across all themes
 - [ ] Theme-specific animations and color palettes
 
 ## Phase 5: Network
