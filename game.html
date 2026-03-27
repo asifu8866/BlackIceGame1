@@ -291,78 +291,42 @@
     // 0=low1, 1=low2, 2=mid1, 3=mid2, 4=jackpot, 5=mid3, 6=high, 7=wild, 8=bonus, 9=blank
 
     const THEMES = {
-        classic: {
-            name: 'BLACK ICE',
-            subtitle: 'CLASSIC SLOTS',
-            accentColor: '#FFD700',
-            frameGlow: '#4400AA',
-            frameBorder: '#6622CC',
+        dayofdead: {
+            name: 'DIA DE LOS MUERTOS',
+            subtitle: 'DAY OF THE DEAD',
+            accentColor: '#FF6B00',  // marigold orange
+            frameGlow: '#FF4400',
+            frameBorder: '#CC3300',
             symbols: [
-                { name: 'CHERRY',     label: 'CHERRY',  color: '#FF2D2D', bgColor: '#4A0000', shape: 'cherry' },
-                { name: 'BAR',        label: 'BAR',     color: '#4488FF', bgColor: '#001A4A', shape: 'bar' },
-                { name: 'DOUBLE_BAR', label: '2xBAR',   color: '#2255CC', bgColor: '#001040', shape: 'bar2' },
-                { name: 'TRIPLE_BAR', label: '3xBAR',   color: '#1A3399', bgColor: '#000A30', shape: 'bar3' },
-                { name: 'SEVEN',      label: '7',       color: '#FFD700', bgColor: '#4A3D00', shape: 'seven' },
-                { name: 'BELL',       label: 'BELL',    color: '#FFDD44', bgColor: '#4A4000', shape: 'bell' },
-                { name: 'DIAMOND',    label: 'DIAM',    color: '#00EEFF', bgColor: '#003A40', shape: 'diamond' },
-                { name: 'WILD',       label: 'WILD',    color: '#CC44FF', bgColor: '#300050', shape: 'star' },
-                { name: 'FIREBALL',   label: 'FIRE',    color: '#FF6600', bgColor: '#4A2000', shape: 'fire' },
-                { name: 'BLANK',      label: '',        color: '#333333', bgColor: '#111111', shape: 'none' }
-            ]
-        },
-        dragon: {
-            name: 'DRAGON FORTUNE',
-            subtitle: 'EASTERN RICHES',
-            accentColor: '#FF4444',
-            frameGlow: '#880000',
-            frameBorder: '#CC2222',
-            symbols: [
-                { name: 'CHERRY',     label: 'COIN',    color: '#FFD700', bgColor: '#4A3D00', shape: 'circle' },
-                { name: 'BAR',        label: 'FAN',     color: '#FF6666', bgColor: '#4A0020', shape: 'fan' },
-                { name: 'DOUBLE_BAR', label: 'SCROLL',  color: '#FFaa44', bgColor: '#402800', shape: 'scroll' },
-                { name: 'TRIPLE_BAR', label: 'TEMPLE',  color: '#FF3333', bgColor: '#400000', shape: 'temple' },
-                { name: 'SEVEN',      label: 'DRAGON',  color: '#FF0000', bgColor: '#4A0000', shape: 'dragon' },
-                { name: 'BELL',       label: 'LANTERN', color: '#FF8800', bgColor: '#402200', shape: 'lantern' },
-                { name: 'DIAMOND',    label: 'JADE',    color: '#44FF88', bgColor: '#004020', shape: 'jade' },
-                { name: 'WILD',       label: 'YIN YANG',color: '#FFFFFF', bgColor: '#222222', shape: 'yinyang' },
-                { name: 'FIREBALL',   label: 'PHOENIX', color: '#FF4400', bgColor: '#4A1500', shape: 'phoenix' },
-                { name: 'BLANK',      label: '',        color: '#333333', bgColor: '#1A0000', shape: 'none' }
-            ]
-        },
-        ocean: {
-            name: 'OCEAN TREASURE',
-            subtitle: 'DEEP SEA RICHES',
-            accentColor: '#00CCFF',
-            frameGlow: '#003366',
-            frameBorder: '#0066AA',
-            symbols: [
-                { name: 'CHERRY',     label: 'SHELL',   color: '#FFaaCC', bgColor: '#402030', shape: 'shell' },
-                { name: 'BAR',        label: 'FISH',    color: '#44CCFF', bgColor: '#002040', shape: 'fish' },
-                { name: 'DOUBLE_BAR', label: 'CORAL',   color: '#FF6688', bgColor: '#401020', shape: 'coral' },
-                { name: 'TRIPLE_BAR', label: 'ANCHOR',  color: '#8888AA', bgColor: '#202030', shape: 'anchor' },
-                { name: 'SEVEN',      label: 'TRIDENT', color: '#FFD700', bgColor: '#4A3D00', shape: 'trident' },
-                { name: 'BELL',       label: 'PEARL',   color: '#FFFFFF', bgColor: '#303040', shape: 'pearl' },
-                { name: 'DIAMOND',    label: 'CHEST',   color: '#FFaa00', bgColor: '#403000', shape: 'chest' },
-                { name: 'WILD',       label: 'OCTOPUS', color: '#AA44FF', bgColor: '#200040', shape: 'octopus' },
-                { name: 'FIREBALL',   label: 'BUBBLE',  color: '#44DDFF', bgColor: '#003040', shape: 'bubble' },
-                { name: 'BLANK',      label: '',        color: '#1a2a3a', bgColor: '#0a1520', shape: 'none' }
+                { name: 'WILD',       label: 'WILD',     color: '#CC44FF', bgColor: '#300050', shape: 'sugar_skull' },
+                { name: 'LA_CATRINA', label: 'CATRINA',   color: '#FF44AA', bgColor: '#400020', shape: 'catrina' },
+                { name: 'MARIACHI_S', label: 'SINGER',    color: '#FF3333', bgColor: '#400000', shape: 'mariachi' },
+                { name: 'DANCER',     label: 'DANCER',    color: '#44DDDD', bgColor: '#004040', shape: 'dancer' },
+                { name: 'GUITARIST',  label: 'GUITAR',    color: '#FF8800', bgColor: '#402200', shape: 'guitarist' },
+                { name: 'TEQUILA',    label: 'TEQUILA',   color: '#FFBB33', bgColor: '#403000', shape: 'tequila' },
+                { name: 'MARIGOLD',   label: 'FLOWER',    color: '#FFAA00', bgColor: '#402800', shape: 'marigold' },
+                { name: 'CANDLES',    label: 'CANDLES',   color: '#FFDD44', bgColor: '#403800', shape: 'candles' },
+                { name: 'GUITAR',     label: 'GUITAR',    color: '#AA7744', bgColor: '#302010', shape: 'guitar' },
+                { name: 'SCATTER',    label: 'SCATTER',   color: '#FFD700', bgColor: '#4A3D00', shape: 'ofrenda' },
+                { name: 'FIREBALL',   label: 'FIRE',      color: '#FF6600', bgColor: '#4A2000', shape: 'flame_skull' },
+                { name: 'JACKPOT_SYM',label: 'JACKPOT',   color: '#FFD700', bgColor: '#4A3800', shape: 'golden_marigold' }
             ]
         }
     };
 
-    // Current active theme
-    let currentTheme = 'classic';
-    let gameScreen = 'menu'; // 'menu' = theme select, 'game' = playing
+    // Current active theme — single Day of the Dead theme, skip menu
+    let currentTheme = 'dayofdead';
+    let gameScreen = 'game'; // Skip menu, go straight to game (single theme)
 
     // Get the active theme object
     function getTheme() {
         return THEMES[currentTheme];
     }
 
-    // SYMBOLS array points to the active theme's symbols (updated when theme changes)
-    let SYMBOLS = THEMES.classic.symbols;
+    // SYMBOLS array points to the active theme's symbols (12 symbols, indices 0-11)
+    let SYMBOLS = THEMES.dayofdead.symbols;
 
-    // Switch to a new theme
+    // Switch to a new theme (kept for compatibility)
     function setTheme(themeName) {
         if (!THEMES[themeName]) return;
         currentTheme = themeName;
@@ -752,28 +716,13 @@
 
         let p = { x: x, y: y, life: 1.0, speed: 0.005 + Math.random() * 0.01 };
 
-        if (theme === 'classic') {
-            // Electric sparks - fast, bright purple
-            p.color = '#8844EE';
-            p.size = 2 + Math.random() * 3;
-            p.vx = (Math.random() - 0.5) * 2;
-            p.vy = (Math.random() - 0.5) * 2;
-            p.speed = 0.02;
-        } else if (theme === 'dragon') {
-            // Flame embers - rise upward, red/orange
-            p.color = Math.random() > 0.5 ? '#FF4400' : '#FFAA00';
-            p.size = 2 + Math.random() * 4;
-            p.vx = (Math.random() - 0.5) * 0.5;
-            p.vy = -1 - Math.random() * 2;
-            p.speed = 0.008;
-        } else if (theme === 'ocean') {
-            // Bubbles - rise upward, blue/cyan
-            p.color = Math.random() > 0.5 ? '#44DDFF' : '#0088CC';
-            p.size = 3 + Math.random() * 5;
-            p.vx = (Math.random() - 0.5) * 0.3;
-            p.vy = -0.5 - Math.random() * 1;
-            p.speed = 0.005;
-        }
+        // Day of the Dead marigold embers — warm oranges, yellows, and purples
+        const emberColors = ['#FF6B00', '#FFAA00', '#FFDD44', '#CC44FF', '#FF4400'];
+        p.color = emberColors[Math.floor(Math.random() * emberColors.length)];
+        p.size = 2 + Math.random() * 4;
+        p.vx = (Math.random() - 0.5) * 1.0;
+        p.vy = -0.8 - Math.random() * 1.5;
+        p.speed = 0.008 + Math.random() * 0.005;
 
         particles.push(p);
     }
@@ -846,117 +795,503 @@
         ctx.fillText(sym.label, cx, cy + 40);
     }
 
-    // Draw a simple icon shape for each symbol type
+    // Draw a Day of the Dead themed icon for each symbol type
+    // Uses Canvas 2D primitives only — no images required
     function drawSymbolIcon(sym, cx, cy) {
         ctx.save();
         ctx.shadowColor = sym.color;
         ctx.shadowBlur = 12;
 
-        switch (sym.name) {
-            case 'CHERRY':
-                // Two circles with stems
+        switch (sym.shape) {
+            case 'sugar_skull':
+                // Ornate sugar skull — WILD symbol
+                ctx.fillStyle = sym.color;
+                // Skull shape (rounded top, jaw)
+                ctx.beginPath();
+                ctx.arc(cx, cy - 4, 22, Math.PI, 0); // top dome
+                ctx.lineTo(cx + 18, cy + 10);
+                ctx.quadraticCurveTo(cx + 16, cy + 22, cx, cy + 24);
+                ctx.quadraticCurveTo(cx - 16, cy + 22, cx - 18, cy + 10);
+                ctx.closePath();
+                ctx.fill();
+                // Eye sockets — X shapes
+                ctx.strokeStyle = '#1a0030';
+                ctx.lineWidth = 2.5;
+                // Left eye X
+                ctx.beginPath();
+                ctx.moveTo(cx - 12, cy - 10); ctx.lineTo(cx - 4, cy - 2);
+                ctx.moveTo(cx - 4, cy - 10); ctx.lineTo(cx - 12, cy - 2);
+                ctx.stroke();
+                // Right eye X
+                ctx.beginPath();
+                ctx.moveTo(cx + 4, cy - 10); ctx.lineTo(cx + 12, cy - 2);
+                ctx.moveTo(cx + 12, cy - 10); ctx.lineTo(cx + 4, cy - 2);
+                ctx.stroke();
+                // Heart nose
+                ctx.fillStyle = '#FF44AA';
+                ctx.beginPath();
+                ctx.arc(cx - 2, cy + 6, 3, 0, Math.PI * 2);
+                ctx.arc(cx + 2, cy + 6, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(cx - 5, cy + 7); ctx.lineTo(cx, cy + 12); ctx.lineTo(cx + 5, cy + 7);
+                ctx.fill();
+                // Flower crown on top
+                ctx.fillStyle = '#FF6B00';
+                for (let i = 0; i < 5; i++) {
+                    const angle = Math.PI + (i * Math.PI) / 5;
+                    ctx.beginPath();
+                    ctx.arc(cx + Math.cos(angle) * 16, cy - 20 + Math.sin(angle) * 6, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                break;
+
+            case 'catrina':
+                // Elegant La Catrina — lady with large hat brim
+                ctx.fillStyle = sym.color;
+                // Hat brim (wide ellipse)
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - 16, 30, 8, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Hat top
+                ctx.fillStyle = '#DD2288';
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - 24, 16, 12, 0, Math.PI, 0);
+                ctx.fill();
+                // Flower on hat
+                ctx.fillStyle = '#FFAA00';
+                ctx.beginPath();
+                ctx.arc(cx + 14, cy - 24, 5, 0, Math.PI * 2);
+                ctx.fill();
+                // Face (oval)
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.ellipse(cx, cy + 2, 12, 14, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Eyes (elegant circles)
+                ctx.fillStyle = '#1a0030';
+                ctx.beginPath();
+                ctx.arc(cx - 5, cy - 1, 3, 0, Math.PI * 2);
+                ctx.arc(cx + 5, cy - 1, 3, 0, Math.PI * 2);
+                ctx.fill();
+                // Smile
+                ctx.strokeStyle = '#1a0030';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(cx, cy + 5, 6, 0.1 * Math.PI, 0.9 * Math.PI);
+                ctx.stroke();
+                // Dress/body silhouette
                 ctx.fillStyle = sym.color;
                 ctx.beginPath();
-                ctx.arc(cx - 14, cy + 8, 16, 0, Math.PI * 2);
+                ctx.moveTo(cx - 10, cy + 16);
+                ctx.lineTo(cx - 18, cy + 30);
+                ctx.lineTo(cx + 18, cy + 30);
+                ctx.lineTo(cx + 10, cy + 16);
+                ctx.closePath();
                 ctx.fill();
+                break;
+
+            case 'mariachi':
+                // Mariachi singer with sombrero, open mouth
+                ctx.fillStyle = sym.color;
+                // Sombrero brim
                 ctx.beginPath();
-                ctx.arc(cx + 14, cy + 8, 16, 0, Math.PI * 2);
+                ctx.ellipse(cx, cy - 14, 28, 7, 0, 0, Math.PI * 2);
                 ctx.fill();
-                // Stems
-                ctx.strokeStyle = '#44AA22';
+                // Sombrero top
+                ctx.fillStyle = '#CC0000';
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - 22, 14, 10, 0, Math.PI, 0);
+                ctx.fill();
+                // Gold band
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - 14, 14, 3, 0, Math.PI, 0);
+                ctx.stroke();
+                // Head
+                ctx.fillStyle = '#DDAA77';
+                ctx.beginPath();
+                ctx.arc(cx, cy + 2, 12, 0, Math.PI * 2);
+                ctx.fill();
+                // Open mouth (singing)
+                ctx.fillStyle = '#400000';
+                ctx.beginPath();
+                ctx.ellipse(cx, cy + 8, 5, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Eyes
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(cx - 5, cy - 1, 2, 0, Math.PI * 2);
+                ctx.arc(cx + 5, cy - 1, 2, 0, Math.PI * 2);
+                ctx.fill();
+                // Body
+                ctx.fillStyle = sym.color;
+                ctx.beginPath();
+                ctx.moveTo(cx - 8, cy + 14);
+                ctx.lineTo(cx - 14, cy + 30);
+                ctx.lineTo(cx + 14, cy + 30);
+                ctx.lineTo(cx + 8, cy + 14);
+                ctx.closePath();
+                ctx.fill();
+                break;
+
+            case 'dancer':
+                // Dancing skeleton figure with arms raised
+                ctx.fillStyle = sym.color;
+                // Head
+                ctx.beginPath();
+                ctx.arc(cx, cy - 18, 10, 0, Math.PI * 2);
+                ctx.fill();
+                // Spine
+                ctx.strokeStyle = sym.color;
                 ctx.lineWidth = 3;
                 ctx.beginPath();
-                ctx.moveTo(cx - 14, cy - 8);
-                ctx.quadraticCurveTo(cx, cy - 30, cx + 14, cy - 8);
+                ctx.moveTo(cx, cy - 8);
+                ctx.lineTo(cx, cy + 12);
+                ctx.stroke();
+                // Arms raised in dance
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(cx - 20, cy - 14);
+                ctx.quadraticCurveTo(cx - 14, cy - 4, cx, cy - 2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(cx + 20, cy - 14);
+                ctx.quadraticCurveTo(cx + 14, cy - 4, cx, cy - 2);
+                ctx.stroke();
+                // Legs (spread in dance pose)
+                ctx.beginPath();
+                ctx.moveTo(cx, cy + 12);
+                ctx.lineTo(cx - 14, cy + 30);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(cx, cy + 12);
+                ctx.lineTo(cx + 14, cy + 28);
+                ctx.quadraticCurveTo(cx + 18, cy + 24, cx + 20, cy + 20);
+                ctx.stroke();
+                // Rib lines
+                ctx.lineWidth = 1.5;
+                for (let i = 0; i < 3; i++) {
+                    const ry = cy - 4 + i * 5;
+                    ctx.beginPath();
+                    ctx.moveTo(cx - 8, ry); ctx.lineTo(cx + 8, ry);
+                    ctx.stroke();
+                }
+                break;
+
+            case 'guitarist':
+                // Mariachi figure playing guitar
+                ctx.fillStyle = sym.color;
+                // Head with hat
+                ctx.beginPath();
+                ctx.arc(cx - 4, cy - 16, 8, 0, Math.PI * 2);
+                ctx.fill();
+                // Hat
+                ctx.fillStyle = '#CC6600';
+                ctx.beginPath();
+                ctx.ellipse(cx - 4, cy - 22, 14, 5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                // Body
+                ctx.fillStyle = sym.color;
+                ctx.beginPath();
+                ctx.moveTo(cx - 10, cy - 8);
+                ctx.lineTo(cx - 14, cy + 14);
+                ctx.lineTo(cx + 2, cy + 14);
+                ctx.lineTo(cx + 2, cy - 8);
+                ctx.closePath();
+                ctx.fill();
+                // Guitar body held at side
+                ctx.fillStyle = '#AA6633';
+                ctx.beginPath();
+                ctx.ellipse(cx + 14, cy + 4, 12, 16, 0.2, 0, Math.PI * 2);
+                ctx.fill();
+                // Guitar sound hole
+                ctx.fillStyle = '#442200';
+                ctx.beginPath();
+                ctx.arc(cx + 14, cy + 4, 4, 0, Math.PI * 2);
+                ctx.fill();
+                // Guitar neck
+                ctx.strokeStyle = '#AA6633';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(cx + 14, cy - 12);
+                ctx.lineTo(cx + 20, cy - 24);
+                ctx.stroke();
+                // Legs
+                ctx.strokeStyle = sym.color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(cx - 8, cy + 14); ctx.lineTo(cx - 12, cy + 30);
+                ctx.moveTo(cx - 2, cy + 14); ctx.lineTo(cx + 2, cy + 30);
                 ctx.stroke();
                 break;
 
-            case 'BAR':
-            case 'DOUBLE_BAR':
-            case 'TRIPLE_BAR':
-                // Horizontal bar(s)
+            case 'tequila':
+                // Tequila bottle shape with label
                 ctx.fillStyle = sym.color;
-                const barCount = sym.name === 'BAR' ? 1 : sym.name === 'DOUBLE_BAR' ? 2 : 3;
-                const barH = 12;
-                const barW = 60;
-                const totalH = barCount * barH + (barCount - 1) * 6;
-                const startY = cy - totalH / 2;
-                for (let i = 0; i < barCount; i++) {
-                    const by = startY + i * (barH + 6);
-                    roundRect(cx - barW / 2, by, barW, barH, 3, true);
-                }
-                break;
-
-            case 'SEVEN':
-                // Big bold 7
-                ctx.fillStyle = sym.color;
-                ctx.font = 'bold 72px Arial, sans-serif';
+                // Bottle body
+                ctx.beginPath();
+                ctx.moveTo(cx - 10, cy + 26);
+                ctx.lineTo(cx - 10, cy - 6);
+                ctx.lineTo(cx - 6, cy - 12);
+                ctx.lineTo(cx - 6, cy - 22);
+                ctx.lineTo(cx + 6, cy - 22);
+                ctx.lineTo(cx + 6, cy - 12);
+                ctx.lineTo(cx + 10, cy - 6);
+                ctx.lineTo(cx + 10, cy + 26);
+                ctx.closePath();
+                ctx.fill();
+                // Cap
+                ctx.fillStyle = '#FFD700';
+                ctx.fillRect(cx - 5, cy - 26, 10, 5);
+                // Label
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(cx - 8, cy, 16, 14);
+                ctx.fillStyle = '#AA7700';
+                ctx.font = 'bold 7px Arial';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText('7', cx, cy);
+                ctx.fillText('AGAVE', cx, cy + 7);
                 break;
 
-            case 'BELL':
-                // Bell shape
+            case 'marigold':
+                // 8-petal marigold flower
                 ctx.fillStyle = sym.color;
-                ctx.beginPath();
-                ctx.moveTo(cx - 24, cy + 12);
-                ctx.quadraticCurveTo(cx - 24, cy - 24, cx, cy - 28);
-                ctx.quadraticCurveTo(cx + 24, cy - 24, cx + 24, cy + 12);
-                ctx.lineTo(cx - 24, cy + 12);
-                ctx.fill();
-                // Clapper
-                ctx.beginPath();
-                ctx.arc(cx, cy + 18, 6, 0, Math.PI * 2);
-                ctx.fill();
-                break;
-
-            case 'DIAMOND':
-                // Diamond shape
-                ctx.fillStyle = sym.color;
-                ctx.beginPath();
-                ctx.moveTo(cx, cy - 28);
-                ctx.lineTo(cx + 24, cy);
-                ctx.lineTo(cx, cy + 28);
-                ctx.lineTo(cx - 24, cy);
-                ctx.closePath();
-                ctx.fill();
-                break;
-
-            case 'WILD':
-                // Star burst for WILD
-                ctx.fillStyle = sym.color;
-                ctx.beginPath();
-                for (let i = 0; i < 10; i++) {
-                    const angle = (i * Math.PI * 2) / 10 - Math.PI / 2;
-                    const radius = i % 2 === 0 ? 28 : 14;
-                    const px = cx + Math.cos(angle) * radius;
-                    const py = cy + Math.sin(angle) * radius;
-                    if (i === 0) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
+                // Outer petals
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i * Math.PI * 2) / 8;
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        cx + Math.cos(angle) * 14,
+                        cy + Math.sin(angle) * 14,
+                        8, 5,
+                        angle, 0, Math.PI * 2
+                    );
+                    ctx.fill();
                 }
-                ctx.closePath();
+                // Inner petals (darker orange)
+                ctx.fillStyle = '#FF8800';
+                for (let i = 0; i < 8; i++) {
+                    const angle = (i * Math.PI * 2) / 8 + Math.PI / 8;
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        cx + Math.cos(angle) * 8,
+                        cy + Math.sin(angle) * 8,
+                        6, 3.5,
+                        angle, 0, Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+                // Center
+                ctx.fillStyle = '#CC5500';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 5, 0, Math.PI * 2);
                 ctx.fill();
                 break;
 
-            case 'FIREBALL':
-                // Flame shape
-                ctx.fillStyle = sym.color;
+            case 'candles':
+                // Three candles with flames
+                const candlePositions = [-14, 0, 14];
+                const candleHeights = [24, 30, 22];
+                for (let i = 0; i < 3; i++) {
+                    const bx = cx + candlePositions[i];
+                    const bh = candleHeights[i];
+                    // Candle body
+                    ctx.fillStyle = '#FFEECC';
+                    ctx.fillRect(bx - 4, cy + 26 - bh, 8, bh);
+                    // Flame
+                    ctx.fillStyle = sym.color;
+                    ctx.beginPath();
+                    ctx.moveTo(bx, cy + 26 - bh - 12);
+                    ctx.quadraticCurveTo(bx + 5, cy + 26 - bh - 4, bx, cy + 26 - bh);
+                    ctx.quadraticCurveTo(bx - 5, cy + 26 - bh - 4, bx, cy + 26 - bh - 12);
+                    ctx.fill();
+                    // Inner flame
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.beginPath();
+                    ctx.moveTo(bx, cy + 26 - bh - 8);
+                    ctx.quadraticCurveTo(bx + 2, cy + 26 - bh - 3, bx, cy + 26 - bh - 1);
+                    ctx.quadraticCurveTo(bx - 2, cy + 26 - bh - 3, bx, cy + 26 - bh - 8);
+                    ctx.fill();
+                }
+                break;
+
+            case 'guitar':
+                // Acoustic guitar outline
+                ctx.strokeStyle = sym.color;
+                ctx.lineWidth = 2.5;
+                ctx.fillStyle = '#5A3A1A';
+                // Body (figure-8)
                 ctx.beginPath();
-                ctx.moveTo(cx, cy - 30);
-                ctx.quadraticCurveTo(cx + 20, cy - 10, cx + 16, cy + 8);
-                ctx.quadraticCurveTo(cx + 10, cy + 0, cx + 8, cy + 16);
-                ctx.quadraticCurveTo(cx, cy + 24, cx - 8, cy + 16);
-                ctx.quadraticCurveTo(cx - 10, cy + 0, cx - 16, cy + 8);
-                ctx.quadraticCurveTo(cx - 20, cy - 10, cx, cy - 30);
+                ctx.ellipse(cx, cy + 10, 16, 18, 0, 0, Math.PI * 2);
                 ctx.fill();
-                // Inner flame
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - 8, 12, 13, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                // Sound hole
+                ctx.fillStyle = '#2A1A0A';
+                ctx.beginPath();
+                ctx.arc(cx, cy + 8, 6, 0, Math.PI * 2);
+                ctx.fill();
+                // Neck
+                ctx.fillStyle = '#5A3A1A';
+                ctx.fillRect(cx - 3, cy - 30, 6, 22);
+                ctx.strokeStyle = sym.color;
+                ctx.strokeRect(cx - 3, cy - 30, 6, 22);
+                // Headstock
+                ctx.fillStyle = sym.color;
+                ctx.fillRect(cx - 5, cy - 34, 10, 5);
+                // Strings
+                ctx.strokeStyle = '#DDDDDD';
+                ctx.lineWidth = 0.5;
+                for (let s = -1; s <= 1; s++) {
+                    ctx.beginPath();
+                    ctx.moveTo(cx + s * 2, cy - 30);
+                    ctx.lineTo(cx + s * 3, cy + 24);
+                    ctx.stroke();
+                }
+                break;
+
+            case 'ofrenda':
+                // Altar table with arch and offerings — SCATTER
+                ctx.fillStyle = sym.color;
+                // Table top
+                ctx.fillRect(cx - 24, cy + 6, 48, 4);
+                // Table legs
+                ctx.fillRect(cx - 22, cy + 10, 5, 16);
+                ctx.fillRect(cx + 17, cy + 10, 5, 16);
+                // Arch above
+                ctx.strokeStyle = sym.color;
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(cx, cy + 6, 22, Math.PI, 0);
+                ctx.stroke();
+                // Offerings on table: candle + flower + photo
+                // Candle
+                ctx.fillStyle = '#FFEECC';
+                ctx.fillRect(cx - 14, cy - 4, 4, 10);
+                ctx.fillStyle = '#FFDD44';
+                ctx.beginPath();
+                ctx.arc(cx - 12, cy - 6, 3, 0, Math.PI * 2);
+                ctx.fill();
+                // Flower
+                ctx.fillStyle = '#FF6B00';
+                ctx.beginPath();
+                ctx.arc(cx, cy - 2, 5, 0, Math.PI * 2);
+                ctx.fill();
+                // Photo frame
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(cx + 8, cy - 6, 10, 12);
+                // SCATTER text
+                ctx.fillStyle = sym.color;
+                ctx.font = 'bold 8px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('SCATTER', cx, cy - 16);
+                break;
+
+            case 'flame_skull':
+                // Skull with flames rising — FIREBALL symbol
+                ctx.fillStyle = sym.color;
+                // Flames on top
+                ctx.beginPath();
+                ctx.moveTo(cx - 10, cy - 8);
+                ctx.quadraticCurveTo(cx - 14, cy - 28, cx - 6, cy - 20);
+                ctx.quadraticCurveTo(cx - 4, cy - 30, cx, cy - 18);
+                ctx.quadraticCurveTo(cx + 4, cy - 30, cx + 6, cy - 20);
+                ctx.quadraticCurveTo(cx + 14, cy - 28, cx + 10, cy - 8);
+                ctx.closePath();
+                ctx.fill();
+                // Inner flame glow
                 ctx.fillStyle = '#FFDD00';
                 ctx.beginPath();
-                ctx.moveTo(cx, cy - 14);
-                ctx.quadraticCurveTo(cx + 10, cy, cx + 6, cy + 10);
-                ctx.quadraticCurveTo(cx, cy + 16, cx - 6, cy + 10);
-                ctx.quadraticCurveTo(cx - 10, cy, cx, cy - 14);
+                ctx.moveTo(cx - 6, cy - 10);
+                ctx.quadraticCurveTo(cx - 4, cy - 22, cx, cy - 16);
+                ctx.quadraticCurveTo(cx + 4, cy - 22, cx + 6, cy - 10);
+                ctx.closePath();
+                ctx.fill();
+                // Skull
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(cx, cy + 4, 16, Math.PI, 0);
+                ctx.lineTo(cx + 12, cy + 14);
+                ctx.quadraticCurveTo(cx + 10, cy + 20, cx, cy + 20);
+                ctx.quadraticCurveTo(cx - 10, cy + 20, cx - 12, cy + 14);
+                ctx.closePath();
+                ctx.fill();
+                // Eye sockets
+                ctx.fillStyle = sym.color;
+                ctx.beginPath();
+                ctx.arc(cx - 6, cy + 4, 4, 0, Math.PI * 2);
+                ctx.arc(cx + 6, cy + 4, 4, 0, Math.PI * 2);
+                ctx.fill();
+                // Nose
+                ctx.fillStyle = '#333333';
+                ctx.beginPath();
+                ctx.moveTo(cx, cy + 10); ctx.lineTo(cx - 2, cy + 14); ctx.lineTo(cx + 2, cy + 14);
+                ctx.fill();
+                // Teeth
+                ctx.strokeStyle = '#333333';
+                ctx.lineWidth = 1;
+                for (let t = -4; t <= 4; t += 4) {
+                    ctx.beginPath();
+                    ctx.moveTo(cx + t, cy + 16); ctx.lineTo(cx + t, cy + 20);
+                    ctx.stroke();
+                }
+                break;
+
+            case 'golden_marigold':
+                // Glowing golden flower — JACKPOT symbol
+                // Radiating glow lines
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.5;
+                for (let i = 0; i < 12; i++) {
+                    const angle = (i * Math.PI * 2) / 12;
+                    ctx.beginPath();
+                    ctx.moveTo(cx + Math.cos(angle) * 22, cy + Math.sin(angle) * 22);
+                    ctx.lineTo(cx + Math.cos(angle) * 30, cy + Math.sin(angle) * 30);
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1.0;
+                // Outer petals (bright gold)
+                ctx.fillStyle = '#FFD700';
+                for (let i = 0; i < 10; i++) {
+                    const angle = (i * Math.PI * 2) / 10;
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        cx + Math.cos(angle) * 14,
+                        cy + Math.sin(angle) * 14,
+                        8, 5,
+                        angle, 0, Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+                // Inner petals
+                ctx.fillStyle = '#FFAA00';
+                for (let i = 0; i < 10; i++) {
+                    const angle = (i * Math.PI * 2) / 10 + Math.PI / 10;
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        cx + Math.cos(angle) * 8,
+                        cy + Math.sin(angle) * 8,
+                        5, 3,
+                        angle, 0, Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+                // Bright center
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 3, 0, Math.PI * 2);
                 ctx.fill();
                 break;
         }
@@ -2942,7 +3277,7 @@
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 40px Arial';
         ctx.globalAlpha = 0.8 + Math.sin(attractTimer * 0.05) * 0.2;
-        ctx.fillText('INSERT BILL TO PLAY     ★     3 EXCITING THEMES     ★     PROGRESSIVE JACKPOTS     ★     SKILL FEATURES', attractScrollX, 800);
+        ctx.fillText('INSERT BILL TO PLAY     ★     DIA DE LOS MUERTOS     ★     PROGRESSIVE JACKPOTS     ★     HOLD & SPIN BONUS     ★     SKILL FEATURES', attractScrollX, 800);
         ctx.restore();
 
         // Pulsing "PRESS ANY BUTTON" at very bottom
