@@ -216,14 +216,19 @@
             if (isSpecial(first)) continue;
 
             var matchCount = 1;
-            for (var r = 1; r < NUM_REELS; r++) {
-                var sym = lineSyms[r];
+            var resolvedSym = first; // What the line is "paying as" — updates when first WILD resolves
+            for (var m = 1; m < NUM_REELS; m++) {
+                var sym = lineSyms[m];
                 if (isSpecial(sym)) break;
 
-                var symIsWild = isWild(sym);
-                var firstIsWild = isWild(first);
-
-                if (sym === first || symIsWild || firstIsWild) {
+                if (isWild(sym)) {
+                    // WILD extends the chain, adopts whatever resolvedSym is
+                    matchCount++;
+                } else if (isWild(resolvedSym)) {
+                    // First non-WILD seen: lock in what WILDs substitute for
+                    resolvedSym = sym;
+                    matchCount++;
+                } else if (sym === resolvedSym) {
                     matchCount++;
                 } else {
                     break;
@@ -231,13 +236,7 @@
             }
 
             if (matchCount >= 3) {
-                var paySym = SYMBOLS[first].name;
-                if (paySym === 'WILD') {
-                    for (var r = 1; r < matchCount; r++) {
-                        var sn = SYMBOLS[lineSyms[r]].name;
-                        if (sn !== 'WILD') { paySym = sn; break; }
-                    }
-                }
+                var paySym = SYMBOLS[resolvedSym].name;
                 var payout = PAYTABLE[paySym] ? PAYTABLE[paySym][matchCount - 3] * betPerLine : 0;
 
                 if (payout > 0) {
@@ -357,12 +356,14 @@
     }
 
     function resolveBonusRespin(bonusGrid, totalBet) {
+        // Deep copy so caller retains the 'before' state for animation
+        var grid = bonusGrid.map(function(col) { return col.slice(); });
         var newLands = [];
         for (var r = 0; r < NUM_REELS; r++) {
             for (var row = 0; row < NUM_ROWS; row++) {
-                if (bonusGrid[r][row] === null) {
+                if (grid[r][row] === null) {
                     if (cryptoRandom() < BONUS_FIREBALL_CHANCE) {
-                        bonusGrid[r][row] = randomFireballValue(totalBet);
+                        grid[r][row] = randomFireballValue(totalBet);
                         newLands.push({ reel: r, row: row });
                     }
                 }
@@ -372,7 +373,7 @@
         var isFull = true;
         for (var r = 0; r < NUM_REELS; r++) {
             for (var row = 0; row < NUM_ROWS; row++) {
-                if (bonusGrid[r][row] === null) { isFull = false; break; }
+                if (grid[r][row] === null) { isFull = false; break; }
             }
             if (!isFull) break;
         }
@@ -380,12 +381,12 @@
         var total = 0;
         for (var r = 0; r < NUM_REELS; r++) {
             for (var row = 0; row < NUM_ROWS; row++) {
-                if (bonusGrid[r][row]) total += bonusGrid[r][row].value;
+                if (grid[r][row]) total += grid[r][row].value;
             }
         }
 
         return {
-            grid: bonusGrid,
+            grid: grid,
             newLands: newLands,
             gotNewFireball: newLands.length > 0,
             isFull: isFull,
@@ -450,7 +451,7 @@
     function feedJackpots(totalBet) {
         for (var name in jackpotPools) {
             var pool = jackpotPools[name];
-            pool.current += totalBet * pool.feed * (0.8 + cryptoRandom() * 0.4);
+            pool.current += totalBet * pool.feed;
             pool.current = Math.round(pool.current * 100) / 100;
         }
     }
@@ -573,7 +574,7 @@
             results[rtp + '%'] = {
                 spins: numSpins,
                 hitFrequency: (winSpins / numSpins * 100).toFixed(2) + '%',
-                actualRTP: (totalPaid / totalWagered * 100).toFixed(2) + '%',
+                baseGameRTP: (totalPaid / totalWagered * 100).toFixed(2) + '% (base game only, excludes bonus/FS/JP)',
                 targetRTP: rtp + '%',
                 bonusTriggers: bonusTriggers,
                 scatterTriggers: scatterTriggers,
