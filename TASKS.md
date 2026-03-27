@@ -17,8 +17,8 @@
 - [x] Build reel strip weight tables for 88%, 92%, and 96% RTP
 - [x] Implement 10-payline win detection
 - [x] Create paytable with correct symbol values
-- [ ] Build Hold and Spin bonus trigger (every 80-120 spins)
-- [ ] Implement Fireball lock mechanic during Hold and Spin
+- [x] Build Hold and Spin bonus trigger (every 80-120 spins)
+- [x] Implement Fireball lock mechanic during Hold and Spin
 - [ ] Add 4-level jackpot system (Mini, Minor, Major, Mega)
 - [ ] Add Nudge skill feature (shift reel one position)
 - [ ] Add Symbol Switch skill feature
