@@ -1284,6 +1284,8 @@
             // Round to nearest cent for clean display
             pool.current = Math.round(pool.current * 100) / 100;
         }
+        // If connected to progressive network, send feed to shared pool
+        if (typeof sendProgressiveFeed === 'function') sendProgressiveFeed();
     }
 
     // Award a jackpot and reset it to the seed value
@@ -1291,6 +1293,8 @@
         const pool = jackpotPools[name];
         const amount = Math.floor(pool.current);
         pool.current = pool.seed; // reset to starting value
+        // If connected to progressive network, notify other cabinets
+        if (typeof sendProgressiveAward === 'function') sendProgressiveAward(name, amount);
         return amount;
     }
 
@@ -3014,6 +3018,8 @@
         drawSpinButton();
         drawCashoutOverlay(); // TITO cashout message (when active)
         drawOperatorMenu();   // operator settings overlay (when open)
+        drawNetworkStatus();        // progressive network indicator (top-right corner)
+        drawNetworkJackpotAlert();  // "JACKPOT WON!" banner when another cabinet wins
 
         // Request the next frame
         requestAnimationFrame(gameLoop);
@@ -3135,6 +3141,203 @@
 
     // Make simulation accessible from console
     window.runSimulation = runSimulation;
+
+    // ===== PROGRESSIVE JACKPOT NETWORK =====
+    // Links jackpot pools across multiple cabinets on the same local network.
+    // Uses a WebSocket relay server running on one machine (the "host").
+    // If no host is found, this cabinet uses its own local pools (default behavior).
+    //
+    // Architecture:
+    //   - A separate Node.js relay runs on the host machine at ws://host:9200
+    //   - Each cabinet connects as a client
+    //   - After every spin, the cabinet sends its jackpot feed contribution
+    //   - The relay broadcasts updated pool totals to all connected cabinets
+    //   - If connection drops, cabinet seamlessly falls back to local pools
+    //
+    // Message types:
+    //   Client → Server:  { type: 'feed', pools: { MINI: 0.05, MINOR: 0.03, ... } }
+    //   Client → Server:  { type: 'award', jackpot: 'MINI' }  (won a jackpot)
+    //   Server → Client:  { type: 'pools', pools: { MINI: 52.30, MINOR: 205.10, ... } }
+    //   Server → Client:  { type: 'jackpot_won', jackpot: 'MEGA', machine: 'BLACKICE-003', amount: 12500 }
+    //   Client → Server:  { type: 'register', machineId: 'BLACKICE-001' }
+
+    let progressiveSocket = null;      // WebSocket connection to jackpot relay
+    let progressiveConnected = false;  // are we linked to the network?
+    let progressiveHostUrl = null;     // ws://host:9200
+    let machineId = 'BLACKICE-' + String(Math.floor(Math.random() * 900) + 100); // random until configured
+
+    // ===== NETWORK JACKPOT - CONNECTION =====
+    // Try to connect to the progressive jackpot relay server.
+    // The host URL can be set in the operator menu or auto-discovered.
+    function connectProgressiveJackpot(hostUrl) {
+        if (!hostUrl) hostUrl = 'ws://localhost:9200'; // default: relay on same machine
+        progressiveHostUrl = hostUrl;
+
+        try {
+            progressiveSocket = new WebSocket(hostUrl);
+
+            progressiveSocket.onopen = function() {
+                progressiveConnected = true;
+                // Register this cabinet with the relay
+                progressiveSocket.send(JSON.stringify({
+                    type: 'register',
+                    machineId: machineId
+                }));
+                console.log('[PROGRESSIVE] Connected to jackpot relay at ' + hostUrl);
+            };
+
+            progressiveSocket.onmessage = function(event) {
+                const msg = JSON.parse(event.data);
+
+                // Server is broadcasting updated pool totals
+                if (msg.type === 'pools') {
+                    // Sync our local pools with the network values
+                    for (const name in msg.pools) {
+                        if (jackpotPools[name]) {
+                            jackpotPools[name].current = msg.pools[name];
+                        }
+                    }
+                }
+
+                // Another machine on the network won a jackpot - show celebration
+                if (msg.type === 'jackpot_won' && msg.machine !== machineId) {
+                    showNetworkJackpotWin(msg.jackpot, msg.machine, msg.amount);
+                }
+            };
+
+            progressiveSocket.onclose = function() {
+                progressiveConnected = false;
+                console.log('[PROGRESSIVE] Disconnected from relay - using local pools');
+                // Try to reconnect after 5 seconds
+                setTimeout(function() {
+                    connectProgressiveJackpot(progressiveHostUrl);
+                }, 5000);
+            };
+
+            progressiveSocket.onerror = function() {
+                progressiveConnected = false;
+            };
+        } catch (e) {
+            // Relay not available - game works fine with local pools
+            progressiveConnected = false;
+            console.log('[PROGRESSIVE] No relay found - using local jackpot pools');
+        }
+    }
+
+    // ===== NETWORK JACKPOT - SEND FEED =====
+    // Called after each spin to send this machine's jackpot feed to the relay.
+    // The relay adds it to the shared pool and broadcasts new totals.
+    function sendProgressiveFeed() {
+        if (!progressiveConnected || !progressiveSocket) return;
+
+        // Calculate the feed amounts for this spin
+        const feeds = {};
+        for (const name in jackpotPools) {
+            const pool = jackpotPools[name];
+            feeds[name] = totalBet * pool.feed * (0.8 + Math.random() * 0.4);
+        }
+
+        progressiveSocket.send(JSON.stringify({
+            type: 'feed',
+            machineId: machineId,
+            pools: feeds
+        }));
+    }
+
+    // ===== NETWORK JACKPOT - AWARD =====
+    // Called when this machine wins a jackpot during Hold and Spin.
+    // Tells the relay to reset that pool for all connected cabinets.
+    function sendProgressiveAward(jackpotName, amount) {
+        if (!progressiveConnected || !progressiveSocket) return;
+
+        progressiveSocket.send(JSON.stringify({
+            type: 'award',
+            machineId: machineId,
+            jackpot: jackpotName,
+            amount: amount
+        }));
+    }
+
+    // ===== NETWORK JACKPOT WIN NOTIFICATION =====
+    // Shows a brief overlay when another cabinet on the network hits a jackpot.
+    // This creates excitement on the floor - players see big wins happening nearby.
+    let networkJackpotAlert = null; // { name, machine, amount, timer }
+
+    function showNetworkJackpotWin(jackpotName, machineName, amount) {
+        networkJackpotAlert = {
+            name: jackpotName,
+            machine: machineName,
+            amount: amount,
+            timer: 180 // show for 3 seconds at 60fps
+        };
+        console.log('[PROGRESSIVE] ' + machineName + ' won ' + jackpotName + ' jackpot: $' + amount);
+    }
+
+    // Draw the network jackpot alert overlay
+    function drawNetworkJackpotAlert() {
+        if (!networkJackpotAlert) return;
+        networkJackpotAlert.timer--;
+        if (networkJackpotAlert.timer <= 0) { networkJackpotAlert = null; return; }
+
+        const alert = networkJackpotAlert;
+        const alpha = Math.min(1, alert.timer / 30); // fade out in last 0.5 seconds
+
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.85;
+
+        // Dark banner across top of screen
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 100, canvas.width, 80);
+
+        // Gold border
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0, 100, canvas.width, 80);
+
+        ctx.globalAlpha = alpha;
+
+        // Jackpot color based on tier
+        const jp = JACKPOT_VALUES.find(j => j.name === alert.name);
+        const color = jp ? jp.color : '#FFD700';
+
+        // "JACKPOT WON ON MACHINE X" text
+        ctx.fillStyle = color;
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(alert.name + ' JACKPOT WON!', canvas.width / 2, 130);
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '20px Arial';
+        ctx.fillText(alert.machine + ' won $' + alert.amount.toLocaleString(), canvas.width / 2, 160);
+
+        ctx.restore();
+    }
+
+    // ===== NETWORK STATUS INDICATOR =====
+    // Small dot in the corner shows if we're linked to the progressive network.
+    // Green = connected, Gray = local only (no network).
+    function drawNetworkStatus() {
+        const x = canvas.width - 30;
+        const y = 30;
+        const radius = 6;
+
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = progressiveConnected ? '#44FF44' : '#666666';
+        ctx.fill();
+
+        // Label
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#888888';
+        ctx.fillText(progressiveConnected ? 'LINKED' : 'LOCAL', x - 12, y + 4);
+        ctx.restore();
+    }
+
+    // Try to connect to the progressive jackpot relay on startup
+    connectProgressiveJackpot();
 
     </script>
 </body>
