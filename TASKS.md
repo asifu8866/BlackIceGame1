@@ -59,6 +59,6 @@
 - [x] Performance optimization for smooth 60fps on target hardware
 - [x] Build demo/attract mode for idle cabinets
 - [x] Final math verification (1M+ spin simulation - all RTP within 1%)
-- [ ] GLI certification prep and documentation
+- [x] GLI certification prep and documentation
 - [ ] Create operator manual and setup guide
-- [ ] Package final build for cabinet deployment
+- [x] Package final build for cabinet deployment
