@@ -758,6 +758,89 @@
         roundRect(borderX + 6, borderY + 6, borderW - 12, borderH - 12, 6, true);
     }
 
+    // ===== THEME PARTICLE EFFECTS =====
+    // Each theme gets unique ambient particles around the reel frame
+    // Classic: electric sparks, Dragon: flame embers, Ocean: bubbles
+    let particles = [];
+    const MAX_PARTICLES = 30;
+
+    function spawnParticle() {
+        if (particles.length >= MAX_PARTICLES) return;
+        const theme = currentTheme;
+        const totalReelW = (REEL_W * NUM_REELS) + (REEL_GAP * (NUM_REELS - 1));
+        const frameX = REEL_AREA_X - 20;
+        const frameY = REEL_AREA_Y - 20;
+        const frameW = totalReelW + 40;
+        const frameH = REEL_H + 40;
+
+        // Random position along the frame border
+        const side = Math.random();
+        let x, y;
+        if (side < 0.25) { x = frameX + Math.random() * frameW; y = frameY; }
+        else if (side < 0.5) { x = frameX + Math.random() * frameW; y = frameY + frameH; }
+        else if (side < 0.75) { x = frameX; y = frameY + Math.random() * frameH; }
+        else { x = frameX + frameW; y = frameY + Math.random() * frameH; }
+
+        let p = { x: x, y: y, life: 1.0, speed: 0.005 + Math.random() * 0.01 };
+
+        if (theme === 'classic') {
+            // Electric sparks - fast, bright purple
+            p.color = '#8844EE';
+            p.size = 2 + Math.random() * 3;
+            p.vx = (Math.random() - 0.5) * 2;
+            p.vy = (Math.random() - 0.5) * 2;
+            p.speed = 0.02;
+        } else if (theme === 'dragon') {
+            // Flame embers - rise upward, red/orange
+            p.color = Math.random() > 0.5 ? '#FF4400' : '#FFAA00';
+            p.size = 2 + Math.random() * 4;
+            p.vx = (Math.random() - 0.5) * 0.5;
+            p.vy = -1 - Math.random() * 2;
+            p.speed = 0.008;
+        } else if (theme === 'ocean') {
+            // Bubbles - rise upward, blue/cyan
+            p.color = Math.random() > 0.5 ? '#44DDFF' : '#0088CC';
+            p.size = 3 + Math.random() * 5;
+            p.vx = (Math.random() - 0.5) * 0.3;
+            p.vy = -0.5 - Math.random() * 1;
+            p.speed = 0.005;
+        }
+
+        particles.push(p);
+    }
+
+    function updateAndDrawParticles() {
+        // Spawn new particles
+        if (Math.random() < 0.3) spawnParticle();
+
+        ctx.save();
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= p.speed;
+
+            if (p.life <= 0) {
+                particles.splice(i, 1);
+                continue;
+            }
+
+            ctx.globalAlpha = p.life * 0.6;
+            ctx.fillStyle = p.color;
+
+            if (currentTheme === 'ocean') {
+                // Draw as circle (bubble)
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                // Draw as small rectangle (spark/ember)
+                ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size * p.life, p.size * p.life);
+            }
+        }
+        ctx.restore();
+    }
+
     // Draw a single symbol in its cell
     function drawSymbol(symbolIndex, x, y, w, h) {
         const sym = SYMBOLS[symbolIndex];
@@ -2918,6 +3001,7 @@
 
         // Draw each layer from back to front
         drawMachineFrame();
+        updateAndDrawParticles(); // theme-specific particles (sparks, embers, bubbles)
         drawJackpotBar();
         drawReels();
         drawLandingFlashes(); // white flash when each reel stops
