@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black Ice Gaming - Operator Dashboard</title>
+    <style>
+        /* ===== OPERATOR BACK-OFFICE DASHBOARD =====
+           Opens on a tablet or PC to monitor all cabinets on the floor.
+           Connects to the jackpot relay server to pull machine data.
+           Dark theme matches the gaming aesthetic. */
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #0a0a14;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Header bar */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 22px;
+            color: #FFD700;
+            letter-spacing: 1px;
+        }
+        .header .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #888;
+        }
+        .header .status .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+        }
+        .header .status .dot.connected { background: #44FF44; }
+
+        /* Summary cards row */
+        .summary-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-card {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4a;
+            border-radius: 10px;
+            padding: 18px;
+            text-align: center;
+        }
+        .summary-card .label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        .summary-card .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #FFD700;
+        }
+        .summary-card .value.green { color: #44FF44; }
+        .summary-card .value.red { color: #FF4444; }
+        .summary-card .value.blue { color: #44BBFF; }
+
+        /* Machine table */
+        .machines-section {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .machines-section h2 {
+            font-size: 16px;
+            color: #ccc;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #2a2a4a;
+        }
+        td {
+            padding: 12px;
+            font-size: 14px;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        tr:hover td {
+            background: rgba(255, 215, 0, 0.03);
+        }
+        .machine-id {
+            font-weight: bold;
+            color: #FFD700;
+        }
+        .rtp-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .rtp-86 { background: #442222; color: #FF6666; }
+        .rtp-88 { background: #443322; color: #FFAA44; }
+        .rtp-92 { background: #334422; color: #88FF44; }
+        .rtp-96 { background: #224433; color: #44FFAA; }
+
+        /* Event log */
+        .events-section {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .events-section h2 {
+            font-size: 16px;
+            color: #ccc;
+            margin-bottom: 15px;
+        }
+        .event-log {
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+        .event-log .event {
+            padding: 4px 8px;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        .event-log .event:hover {
+            background: rgba(255, 215, 0, 0.03);
+        }
+        .event-time { color: #666; }
+        .event-type { color: #FFD700; font-weight: bold; }
+        .event-type.JACKPOT { color: #FF4444; }
+        .event-type.BONUS { color: #FF8800; }
+        .event-type.CASHOUT { color: #44FF44; }
+        .event-type.POWER_ON { color: #44BBFF; }
+        .event-type.DOOR_OPEN { color: #FF44FF; }
+
+        /* Jackpot pools display */
+        .jackpot-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .jackpot-card {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid;
+        }
+        .jackpot-card.mega {
+            background: rgba(255, 34, 34, 0.1);
+            border-color: #FF2222;
+        }
+        .jackpot-card.major {
+            background: rgba(255, 215, 0, 0.1);
+            border-color: #FFD700;
+        }
+        .jackpot-card.minor {
+            background: rgba(68, 187, 255, 0.1);
+            border-color: #44BBFF;
+        }
+        .jackpot-card.mini {
+            background: rgba(68, 255, 68, 0.1);
+            border-color: #44FF44;
+        }
+        .jackpot-card .jp-name {
+            font-size: 12px;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+        .jackpot-card .jp-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .jackpot-card.mega .jp-name, .jackpot-card.mega .jp-value { color: #FF2222; }
+        .jackpot-card.major .jp-name, .jackpot-card.major .jp-value { color: #FFD700; }
+        .jackpot-card.minor .jp-name, .jackpot-card.minor .jp-value { color: #44BBFF; }
+        .jackpot-card.mini .jp-name, .jackpot-card.mini .jp-value { color: #44FF44; }
+
+        /* Refresh button */
+        .refresh-btn {
+            background: #2a2a4a;
+            color: #FFD700;
+            border: 1px solid #3a3a5a;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .refresh-btn:hover { background: #3a3a5a; }
+
+        /* No connection overlay */
+        .no-data {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+        .no-data h3 { color: #888; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>BLACK ICE GAMING — OPERATOR DASHBOARD</h1>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <button class="refresh-btn" onclick="refreshAll()">REFRESH</button>
+            <div class="status">
+                <div class="dot" id="relayDot"></div>
+                <span id="relayStatus">Connecting...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jackpot Pools -->
+    <div class="jackpot-row">
+        <div class="jackpot-card mega">
+            <div class="jp-name">MEGA</div>
+            <div class="jp-value" id="jp-mega">$10,000</div>
+        </div>
+        <div class="jackpot-card major">
+            <div class="jp-name">MAJOR</div>
+            <div class="jp-value" id="jp-major">$1,000</div>
+        </div>
+        <div class="jackpot-card minor">
+            <div class="jp-name">MINOR</div>
+            <div class="jp-value" id="jp-minor">$200</div>
+        </div>
+        <div class="jackpot-card mini">
+            <div class="jp-name">MINI</div>
+            <div class="jp-value" id="jp-mini">$50</div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-row">
+        <div class="summary-card">
+            <div class="label">Cabinets Online</div>
+            <div class="value green" id="sum-cabinets">0</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Coin In</div>
+            <div class="value" id="sum-coinIn">$0</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Coin Out</div>
+            <div class="value blue" id="sum-coinOut">$0</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Net Hold</div>
+            <div class="value green" id="sum-hold">$0</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Total Games</div>
+            <div class="value" id="sum-games">0</div>
+        </div>
+        <div class="summary-card">
+            <div class="label">Floor RTP</div>
+            <div class="value" id="sum-rtp">N/A</div>
+        </div>
+    </div>
+
+    <!-- Machine Table -->
+    <div class="machines-section">
+        <h2>CABINET STATUS</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Machine ID</th>
+                    <th>Theme</th>
+                    <th>RTP</th>
+                    <th>Credits</th>
+                    <th>Coin In</th>
+                    <th>Coin Out</th>
+                    <th>Net Hold</th>
+                    <th>Games</th>
+                    <th>Hit Freq</th>
+                    <th>Actual RTP</th>
+                    <th>Bonuses</th>
+                </tr>
+            </thead>
+            <tbody id="machineTable">
+                <tr><td colspan="11" class="no-data"><h3>Waiting for cabinet data...</h3>
+                    <p>Make sure the jackpot relay server is running (node jackpot-relay.js)</p></td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Event Log -->
+    <div class="events-section">
+        <h2>RECENT EVENTS</h2>
+        <div class="event-log" id="eventLog">
+            <div class="event"><span class="event-time">--</span> Waiting for events...</div>
+        </div>
+    </div>
+
+    <script>
+    /* =============================================================
+       OPERATOR DASHBOARD - BACK OFFICE MONITORING
+       Connects to the jackpot relay server to monitor all cabinets.
+       Also polls individual machines for detailed SAS reports.
+       ============================================================= */
+
+    // Dashboard connects to the same relay server as the cabinets
+    const RELAY_URL = 'ws://localhost:9200';
+    const RELAY_HTTP = 'http://localhost:9200';
+
+    let relaySocket = null;
+    let relayConnected = false;
+    let machineReports = {}; // machineId → last SAS report
+    let allEvents = [];      // combined events from all machines
+
+    // ===== RELAY CONNECTION =====
+    function connectRelay() {
+        try {
+            relaySocket = new WebSocket(RELAY_URL);
+
+            relaySocket.onopen = function() {
+                relayConnected = true;
+                document.getElementById('relayDot').classList.add('connected');
+                document.getElementById('relayStatus').textContent = 'Connected to relay';
+
+                // Register as a dashboard (not a cabinet)
+                relaySocket.send(JSON.stringify({
+                    type: 'register',
+                    machineId: 'DASHBOARD',
+                    isDashboard: true
+                }));
+
+                // Request reports from all connected cabinets
+                relaySocket.send(JSON.stringify({ type: 'request_reports' }));
+            };
+
+            relaySocket.onmessage = function(event) {
+                var msg = JSON.parse(event.data);
+
+                // Updated jackpot pool values
+                if (msg.type === 'pools') {
+                    updateJackpotDisplay(msg.pools);
+                }
+
+                // A cabinet sent its SAS report
+                if (msg.type === 'sas_report') {
+                    machineReports[msg.machineId] = msg.report;
+                    updateDashboard();
+                }
+
+                // A jackpot was won somewhere
+                if (msg.type === 'jackpot_won') {
+                    addEvent('JACKPOT', msg.machine + ' won ' + msg.jackpot + ': $' + msg.amount.toLocaleString());
+                }
+
+                // Relay status info (connected machines list)
+                if (msg.type === 'status') {
+                    if (msg.machines) {
+                        document.getElementById('sum-cabinets').textContent = msg.machines.length;
+                    }
+                }
+            };
+
+            relaySocket.onclose = function() {
+                relayConnected = false;
+                document.getElementById('relayDot').classList.remove('connected');
+                document.getElementById('relayStatus').textContent = 'Disconnected';
+                setTimeout(connectRelay, 3000);
+            };
+
+            relaySocket.onerror = function() {
+                relayConnected = false;
+            };
+        } catch (e) {
+            relayConnected = false;
+            document.getElementById('relayStatus').textContent = 'Relay not found';
+        }
+    }
+
+    // ===== ALSO POLL RELAY HTTP ENDPOINT =====
+    // The relay has an HTTP status page we can poll for basic info
+    function pollRelayHTTP() {
+        fetch(RELAY_HTTP)
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                document.getElementById('sum-cabinets').textContent =
+                    data.connectedCabinets || 0;
+
+                if (data.pools) {
+                    updateJackpotDisplay(data.pools);
+                }
+            })
+            .catch(function() {
+                // Relay not available via HTTP
+            });
+    }
+
+    // ===== UPDATE JACKPOT DISPLAY =====
+    function updateJackpotDisplay(pools) {
+        if (pools.MEGA !== undefined) {
+            document.getElementById('jp-mega').textContent = '$' + Number(pools.MEGA).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        if (pools.MAJOR !== undefined) {
+            document.getElementById('jp-major').textContent = '$' + Number(pools.MAJOR).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        if (pools.MINOR !== undefined) {
+            document.getElementById('jp-minor').textContent = '$' + Number(pools.MINOR).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        if (pools.MINI !== undefined) {
+            document.getElementById('jp-mini').textContent = '$' + Number(pools.MINI).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+    }
+
+    // ===== UPDATE MACHINE TABLE AND SUMMARIES =====
+    function updateDashboard() {
+        var ids = Object.keys(machineReports).sort();
+        if (ids.length === 0) return;
+
+        var totalCoinIn = 0, totalCoinOut = 0, totalGames = 0;
+        var rows = '';
+
+        ids.forEach(function(id) {
+            var r = machineReports[id];
+            if (!r || !r.meters) return;
+
+            var coinIn = r.meters['00_coinIn'] || 0;
+            var coinOut = r.meters['01_coinOut'] || 0;
+            var games = r.meters['04_gamesPlayed'] || 0;
+            var gamesWon = r.meters['05_gamesWon'] || 0;
+            var bonuses = r.meters['custom_bonusTriggered'] || 0;
+            var netHold = coinIn - coinOut;
+            var hitFreq = games > 0 ? ((gamesWon / games) * 100).toFixed(1) + '%' : 'N/A';
+            var actualRTP = coinIn > 0 ? ((coinOut / coinIn) * 100).toFixed(1) + '%' : 'N/A';
+            var rtpSetting = (r.currentRTP || '92%').replace('%', '');
+            var theme = r.currentTheme || 'classic';
+            var currentCredits = r.currentCredits || 0;
+
+            totalCoinIn += coinIn;
+            totalCoinOut += coinOut;
+            totalGames += games;
+
+            rows += '<tr>';
+            rows += '<td class="machine-id">' + (r.machineId || id) + '</td>';
+            rows += '<td>' + theme.charAt(0).toUpperCase() + theme.slice(1) + '</td>';
+            rows += '<td><span class="rtp-badge rtp-' + rtpSetting + '">' + rtpSetting + '%</span></td>';
+            rows += '<td>' + currentCredits.toLocaleString() + '</td>';
+            rows += '<td>$' + coinIn.toLocaleString() + '</td>';
+            rows += '<td>$' + coinOut.toLocaleString() + '</td>';
+            rows += '<td style="color:' + (netHold >= 0 ? '#44FF44' : '#FF4444') + '">$' + netHold.toLocaleString() + '</td>';
+            rows += '<td>' + games.toLocaleString() + '</td>';
+            rows += '<td>' + hitFreq + '</td>';
+            rows += '<td>' + actualRTP + '</td>';
+            rows += '<td>' + bonuses + '</td>';
+            rows += '</tr>';
+        });
+
+        document.getElementById('machineTable').innerHTML = rows || '<tr><td colspan="11" class="no-data">No machine data received</td></tr>';
+
+        // Update summary cards
+        var totalHold = totalCoinIn - totalCoinOut;
+        var floorRTP = totalCoinIn > 0 ? ((totalCoinOut / totalCoinIn) * 100).toFixed(1) + '%' : 'N/A';
+
+        document.getElementById('sum-cabinets').textContent = ids.length;
+        document.getElementById('sum-coinIn').textContent = '$' + totalCoinIn.toLocaleString();
+        document.getElementById('sum-coinOut').textContent = '$' + totalCoinOut.toLocaleString();
+        document.getElementById('sum-hold').textContent = '$' + totalHold.toLocaleString();
+        document.getElementById('sum-hold').style.color = totalHold >= 0 ? '#44FF44' : '#FF4444';
+        document.getElementById('sum-games').textContent = totalGames.toLocaleString();
+        document.getElementById('sum-rtp').textContent = floorRTP;
+    }
+
+    // ===== EVENT LOG =====
+    function addEvent(type, detail) {
+        var now = new Date();
+        var time = now.toLocaleTimeString();
+        allEvents.unshift({ time: time, type: type, detail: detail });
+        if (allEvents.length > 100) allEvents = allEvents.slice(0, 100);
+        renderEvents();
+    }
+
+    function renderEvents() {
+        var html = '';
+        allEvents.forEach(function(evt) {
+            html += '<div class="event">';
+            html += '<span class="event-time">' + evt.time + '</span> ';
+            html += '<span class="event-type ' + evt.type + '">[' + evt.type + ']</span> ';
+            html += evt.detail;
+            html += '</div>';
+        });
+        document.getElementById('eventLog').innerHTML = html || '<div class="event">No events yet</div>';
+    }
+
+    // ===== MANUAL REFRESH =====
+    // Also supports adding demo data for testing the layout
+    function refreshAll() {
+        pollRelayHTTP();
+        if (relayConnected && relaySocket) {
+            relaySocket.send(JSON.stringify({ type: 'request_reports' }));
+        }
+        addEvent('SYSTEM', 'Manual refresh requested');
+    }
+
+    // ===== DEMO DATA (for layout testing without live cabinets) =====
+    // Populates the dashboard with sample data so you can see the layout
+    function loadDemoData() {
+        machineReports = {
+            'BLACKICE-001': {
+                machineId: 'BLACKICE-001',
+                currentRTP: '92%',
+                currentTheme: 'classic',
+                currentCredits: 847,
+                meters: {
+                    '00_coinIn': 45200,
+                    '01_coinOut': 41584,
+                    '04_gamesPlayed': 4520,
+                    '05_gamesWon': 1491,
+                    '06_cancelledCredits': 12000,
+                    'custom_bonusTriggered': 42
+                }
+            },
+            'BLACKICE-002': {
+                machineId: 'BLACKICE-002',
+                currentRTP: '88%',
+                currentTheme: 'dragon',
+                currentCredits: 1230,
+                meters: {
+                    '00_coinIn': 38700,
+                    '01_coinOut': 33669,
+                    '04_gamesPlayed': 3870,
+                    '05_gamesWon': 1238,
+                    '06_cancelledCredits': 8500,
+                    'custom_bonusTriggered': 36
+                }
+            },
+            'BLACKICE-003': {
+                machineId: 'BLACKICE-003',
+                currentRTP: '96%',
+                currentTheme: 'ocean',
+                currentCredits: 560,
+                meters: {
+                    '00_coinIn': 29100,
+                    '01_coinOut': 27936,
+                    '04_gamesPlayed': 2910,
+                    '05_gamesWon': 960,
+                    '06_cancelledCredits': 5200,
+                    'custom_bonusTriggered': 27
+                }
+            },
+            'BLACKICE-004': {
+                machineId: 'BLACKICE-004',
+                currentRTP: '92%',
+                currentTheme: 'classic',
+                currentCredits: 0,
+                meters: {
+                    '00_coinIn': 52800,
+                    '01_coinOut': 48576,
+                    '04_gamesPlayed': 5280,
+                    '05_gamesWon': 1742,
+                    '06_cancelledCredits': 15000,
+                    'custom_bonusTriggered': 51
+                }
+            }
+        };
+        updateDashboard();
+        addEvent('SYSTEM', 'Demo data loaded (4 simulated cabinets)');
+        addEvent('JACKPOT', 'BLACKICE-002 won MINOR: $218');
+        addEvent('CASHOUT', 'BLACKICE-001 cashed out $120');
+        addEvent('BONUS', 'BLACKICE-003 triggered Hold and Spin');
+        addEvent('POWER_ON', 'BLACKICE-004 powered on');
+    }
+
+    // ===== STARTUP =====
+    connectRelay();
+    // Poll HTTP status every 10 seconds as fallback
+    setInterval(pollRelayHTTP, 10000);
+    pollRelayHTTP();
+
+    // Auto-load demo data if no relay connection after 3 seconds
+    setTimeout(function() {
+        if (!relayConnected && Object.keys(machineReports).length === 0) {
+            loadDemoData();
+        }
+    }, 3000);
+
+    // Make demo loader accessible from console
+    window.loadDemoData = loadDemoData;
+    </script>
+</body>
+</html>
