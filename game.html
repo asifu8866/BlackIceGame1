@@ -241,6 +241,9 @@
         winDisplayIndex = -1;
         nudgeAvailable = false;
         nudgeUsed = false;
+        switchAvailable = false;
+        switchUsed = false;
+        switchSelected = null;
 
         // Randomize new target positions for each reel (where it will land)
         for (let r = 0; r < NUM_REELS; r++) {
@@ -546,7 +549,9 @@
                 // Only draw if the symbol would be at least partially visible
                 if (symY + SYMBOL_H > REEL_AREA_Y - SYMBOL_H && symY < REEL_AREA_Y + REEL_H + SYMBOL_H) {
                     const symbolIdx = getStripSymbol(r, reel.position + row);
-                    drawSymbol(symbolIdx, reelX, symY, REEL_W, SYMBOL_H);
+                    // Apply Symbol Switch offset if this symbol is being swapped
+                    const swOff = getSwitchOffset(r, row);
+                    drawSymbol(symbolIdx, reelX + swOff.x, symY + swOff.y, REEL_W, SYMBOL_H);
                 }
             }
 
@@ -1387,6 +1392,234 @@
         osc.stop(now + 0.08);
     }
 
+    // ===== SYMBOL SWITCH SKILL FEATURE =====
+    // The second skill element for Georgia COAM compliance.
+    // After using (or skipping) Nudge, the player can swap two adjacent
+    // symbols on the grid to try to complete a winning combination.
+    //
+    // How it works:
+    // - Player taps a symbol to select it (highlighted)
+    // - Then taps an adjacent symbol (up/down/left/right) to swap them
+    // - Swap animates smoothly, then wins are re-checked
+    // - One swap per spin (separate from nudge - player gets both)
+    // - Not available during Hold and Spin bonus
+
+    let switchAvailable = false;     // true when player can use Symbol Switch
+    let switchUsed = false;          // true after player uses their switch
+    let switchAnimating = false;     // true during swap animation
+    let switchSelected = null;       // {reel, row} of first selected symbol
+    let switchTarget = null;         // {reel, row} of second selected symbol
+    let switchProgress = 0;          // 0 to 1 animation progress
+
+    const SWITCH_ANIM_SPEED = 0.06; // how fast the swap slides
+
+    // Enable Symbol Switch after a normal spin completes
+    function enableSwitch() {
+        if (gameMode !== 'NORMAL') return;
+        switchAvailable = true;
+        switchUsed = false;
+        switchSelected = null;
+        switchTarget = null;
+    }
+
+    // Player tapped a symbol on the grid - handle selection/swap
+    function handleSwitchTap(reel, row) {
+        if (!switchAvailable || switchUsed || switchAnimating) return;
+        if (gameMode !== 'NORMAL') return;
+        if (isSpinning || nudgeAnimating) return;
+
+        if (!switchSelected) {
+            // First tap - select this symbol
+            switchSelected = { reel: reel, row: row };
+            playSwitchSelectSound();
+        } else {
+            // Second tap - check if adjacent to the first selection
+            const dr = Math.abs(reel - switchSelected.reel);
+            const drow = Math.abs(row - switchSelected.row);
+            const isAdjacent = (dr + drow === 1); // exactly one step away
+
+            if (isAdjacent) {
+                // Valid swap target - start animation
+                switchTarget = { reel: reel, row: row };
+                switchAnimating = true;
+                switchProgress = 0;
+                switchUsed = true;
+
+                // Clear any current win display
+                activeWins = [];
+                showingWins = false;
+                winDisplayIndex = -1;
+                lastWin = 0;
+
+                playSwitchSwapSound();
+            } else if (reel === switchSelected.reel && row === switchSelected.row) {
+                // Tapped same symbol again - deselect
+                switchSelected = null;
+            } else {
+                // Not adjacent - re-select this one instead
+                switchSelected = { reel: reel, row: row };
+                playSwitchSelectSound();
+            }
+        }
+    }
+
+    // Update the swap animation each frame
+    function updateSwitch() {
+        if (!switchAnimating) return;
+
+        switchProgress += SWITCH_ANIM_SPEED;
+
+        if (switchProgress >= 1) {
+            // Animation complete - actually swap the symbols in the grid
+            switchProgress = 0;
+            switchAnimating = false;
+
+            const s = switchSelected;
+            const t = switchTarget;
+            const temp = reelGrid[s.reel][s.row];
+            reelGrid[s.reel][s.row] = reelGrid[t.reel][t.row];
+            reelGrid[t.reel][t.row] = temp;
+
+            // Re-check wins with the new arrangement
+            checkWins();
+
+            // Clean up
+            switchSelected = null;
+            switchTarget = null;
+            switchAvailable = false;
+        }
+    }
+
+    // Get visual offset for a symbol during swap animation
+    function getSwitchOffset(reel, row) {
+        if (!switchAnimating) return { x: 0, y: 0 };
+        const eased = 1 - Math.pow(1 - switchProgress, 2);
+
+        // Check if this symbol is one of the two being swapped
+        if (switchSelected && reel === switchSelected.reel && row === switchSelected.row) {
+            const dx = (switchTarget.reel - switchSelected.reel) * (REEL_W + REEL_GAP) * eased;
+            const dy = (switchTarget.row - switchSelected.row) * SYMBOL_H * eased;
+            return { x: dx, y: dy };
+        }
+        if (switchTarget && reel === switchTarget.reel && row === switchTarget.row) {
+            const dx = (switchSelected.reel - switchTarget.reel) * (REEL_W + REEL_GAP) * eased;
+            const dy = (switchSelected.row - switchTarget.row) * SYMBOL_H * eased;
+            return { x: dx, y: dy };
+        }
+        return { x: 0, y: 0 };
+    }
+
+    // Draw the Symbol Switch UI - highlight selected symbol, show prompt
+    function drawSwitchUI() {
+        if (!switchAvailable || switchUsed || gameMode !== 'NORMAL' || isSpinning) return;
+
+        const baseY = REEL_AREA_Y + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
+
+        // If nudge arrows are still showing, don't overlap the prompt
+        if (nudgeAvailable && !nudgeUsed) return;
+
+        // Show "TAP A SYMBOL TO SWITCH" prompt
+        ctx.save();
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 20px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.globalAlpha = pulse;
+        ctx.fillText('TAP TWO ADJACENT SYMBOLS TO SWAP', MACHINE_X + MACHINE_W / 2, baseY - 42);
+        ctx.restore();
+
+        // Highlight the selected symbol with a gold border
+        if (switchSelected) {
+            const sx = REEL_AREA_X + switchSelected.reel * (REEL_W + REEL_GAP);
+            const sy = baseY + switchSelected.row * SYMBOL_H;
+
+            ctx.save();
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 4;
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 15;
+            roundRect(sx + SYMBOL_PAD, sy + SYMBOL_PAD,
+                      REEL_W - SYMBOL_PAD * 2, SYMBOL_H - SYMBOL_PAD * 2, 8, false, true);
+
+            // Draw small arrows showing valid adjacent positions
+            ctx.fillStyle = '#FFD700';
+            ctx.globalAlpha = pulse;
+            const cx = sx + REEL_W / 2;
+            const cy = sy + SYMBOL_H / 2;
+            const arrowSize = 10;
+
+            // Up arrow (if not top row)
+            if (switchSelected.row > 0) {
+                ctx.beginPath();
+                ctx.moveTo(cx - arrowSize, sy + SYMBOL_PAD - 4);
+                ctx.lineTo(cx, sy + SYMBOL_PAD - 14);
+                ctx.lineTo(cx + arrowSize, sy + SYMBOL_PAD - 4);
+                ctx.fill();
+            }
+            // Down arrow (if not bottom row)
+            if (switchSelected.row < NUM_ROWS - 1) {
+                ctx.beginPath();
+                ctx.moveTo(cx - arrowSize, sy + SYMBOL_H - SYMBOL_PAD + 4);
+                ctx.lineTo(cx, sy + SYMBOL_H - SYMBOL_PAD + 14);
+                ctx.lineTo(cx + arrowSize, sy + SYMBOL_H - SYMBOL_PAD + 4);
+                ctx.fill();
+            }
+            // Left arrow (if not first reel)
+            if (switchSelected.reel > 0) {
+                ctx.beginPath();
+                ctx.moveTo(sx + SYMBOL_PAD - 4, cy - arrowSize);
+                ctx.lineTo(sx + SYMBOL_PAD - 14, cy);
+                ctx.lineTo(sx + SYMBOL_PAD - 4, cy + arrowSize);
+                ctx.fill();
+            }
+            // Right arrow (if not last reel)
+            if (switchSelected.reel < NUM_REELS - 1) {
+                ctx.beginPath();
+                ctx.moveTo(sx + REEL_W - SYMBOL_PAD + 4, cy - arrowSize);
+                ctx.lineTo(sx + REEL_W - SYMBOL_PAD + 14, cy);
+                ctx.lineTo(sx + REEL_W - SYMBOL_PAD + 4, cy + arrowSize);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+    }
+
+    // Select sound - soft chime
+    function playSwitchSelectSound() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = 660;
+        const now = audioCtx.currentTime;
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+    }
+
+    // Swap sound - two-tone whoosh
+    function playSwitchSwapSound() {
+        if (!audioCtx) return;
+        [440, 660].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const t = audioCtx.currentTime + i * 0.06;
+            gain.gain.setValueAtTime(0.15, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+            osc.start(t);
+            osc.stop(t + 0.12);
+        });
+    }
+
     // ===== SOUND EFFECTS =====
     // Generated with Web Audio API - no audio files needed, works 100% offline
     // AudioContext is created on first user interaction (browser requirement)
@@ -1821,6 +2054,22 @@
                 }
             }
         }
+
+        // Check if click is on a symbol for Symbol Switch
+        if (switchAvailable && !switchUsed && !switchAnimating && gameMode === 'NORMAL' && !isSpinning) {
+            const baseY = REEL_AREA_Y + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+            for (let r = 0; r < NUM_REELS; r++) {
+                const reelX = REEL_AREA_X + r * (REEL_W + REEL_GAP);
+                for (let row = 0; row < NUM_ROWS; row++) {
+                    const symY = baseY + row * SYMBOL_H;
+                    if (clickX >= reelX + SYMBOL_PAD && clickX <= reelX + REEL_W - SYMBOL_PAD &&
+                        clickY >= symY + SYMBOL_PAD && clickY <= symY + SYMBOL_H - SYMBOL_PAD) {
+                        handleSwitchTap(r, row);
+                        return;
+                    }
+                }
+            }
+        }
     });
 
     // Also allow spacebar to spin (will map to JAMMA button later)
@@ -1906,6 +2155,7 @@
             checkWins(); // look for winning paylines
             checkBonusTrigger(); // check if Hold and Spin bonus should trigger
             enableNudge(); // allow player to nudge one reel
+            enableSwitch(); // allow player to swap two adjacent symbols
         }
     }
 
@@ -1917,6 +2167,8 @@
         updateReels();
         // Update nudge slide animation
         updateNudge();
+        // Update Symbol Switch animation
+        updateSwitch();
         // Update which win line is being highlighted
         updateWinDisplay();
         // Update Hold and Spin bonus state machine
@@ -1934,6 +2186,7 @@
         drawBonusOverlay();   // Hold and Spin overlay (draws on top of reels when active)
         if (gameMode !== 'HOLD_AND_SPIN') drawPaylineMarkers(); // hide markers during bonus
         drawNudgeUI();        // nudge arrow buttons (when available)
+        drawSwitchUI();       // symbol switch selection UI (when available)
         drawBottomPanel();
         drawSpinButton();
 
