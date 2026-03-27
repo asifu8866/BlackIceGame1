@@ -51,7 +51,7 @@
 - [x] Build jackpot relay server (Node.js, zero dependencies)
 - [x] Implement shared jackpot pool across linked machines
 - [x] Add SAS (Slot Accounting System) reporting
-- [ ] Build back-office dashboard for operators
+- [x] Build back-office dashboard for operators
 
 ## Phase 6: Polish
 > Performance optimization, testing, demo mode

@@ -2980,10 +2980,204 @@
         ctx.restore();
     }
 
+    // ===== DEMO / ATTRACT MODE =====
+    // Activates when the cabinet is idle for 60 seconds.
+    // Shows animated reels cycling through themes with scrolling text.
+    // Any player input (button press, screen touch) exits to theme menu.
+
+    const ATTRACT_IDLE_TIME = 3600;   // 60 seconds at 60fps before attract activates
+    let idleTimer = 0;                // counts up each frame when no input
+    let attractActive = false;        // true when attract mode is running
+    let attractTimer = 0;             // animation timer within attract mode
+    let attractThemeIndex = 0;        // which theme is currently displayed
+    let attractScrollX = 1920;        // scrolling text position
+    let attractReelPositions = [0, 10, 20, 30, 40]; // fake reel positions for display
+
+    // Reset idle timer whenever the player does anything
+    function resetIdleTimer() {
+        idleTimer = 0;
+        if (attractActive) {
+            // Exit attract mode — return to theme selection
+            attractActive = false;
+            gameScreen = 'menu';
+        }
+    }
+
+    // Hook idle reset into all input events
+    document.addEventListener('keydown', resetIdleTimer);
+    document.addEventListener('mousedown', resetIdleTimer);
+    document.addEventListener('touchstart', resetIdleTimer);
+
+    // Draw the attract mode screen
+    function drawAttractMode() {
+        attractTimer++;
+
+        // Cycle themes every 5 seconds
+        if (attractTimer % 300 === 0) {
+            attractThemeIndex = (attractThemeIndex + 1) % THEME_KEYS.length;
+        }
+
+        const themeKey = THEME_KEYS[attractThemeIndex];
+        const theme = THEMES[themeKey];
+
+        // Slowly scroll fake reel positions
+        for (let i = 0; i < 5; i++) {
+            attractReelPositions[i] = (attractReelPositions[i] + 0.3 + i * 0.1) % 48;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Dark gradient background
+        const bgGrad = ctx.createRadialGradient(960, 540, 100, 960, 540, 800);
+        bgGrad.addColorStop(0, '#1a1a2e');
+        bgGrad.addColorStop(1, '#0a0a0a');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, 1920, 1080);
+
+        // Pulsing border glow
+        const pulse = Math.sin(attractTimer * 0.03) * 0.3 + 0.7;
+        ctx.save();
+        ctx.globalAlpha = pulse * 0.4;
+        ctx.strokeStyle = theme.accentColor;
+        ctx.lineWidth = 4;
+        ctx.strokeRect(40, 40, 1840, 1000);
+        ctx.restore();
+
+        // Company title at top
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 48px Arial';
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 20;
+        ctx.fillText('BLACK ICE GAMING', 960, 120);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+
+        // Current theme name
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = theme.accentColor;
+        ctx.font = 'bold 36px Arial';
+        ctx.fillText(theme.name, 960, 200);
+        ctx.fillStyle = '#888888';
+        ctx.font = '20px Arial';
+        ctx.fillText(theme.subtitle, 960, 235);
+        ctx.restore();
+
+        // Draw a small 5x3 grid of symbols in the center (demo reels)
+        const gridX = 460;
+        const gridY = 280;
+        const cellW = 200;
+        const cellH = 120;
+        const gap = 4;
+
+        // Save current symbols, swap to this theme's symbols temporarily
+        const savedSymbols = SYMBOLS;
+        SYMBOLS = theme.symbols;
+
+        for (let reel = 0; reel < 5; reel++) {
+            for (let row = 0; row < 3; row++) {
+                const x = gridX + reel * (cellW + gap);
+                const y = gridY + row * (cellH + gap);
+                const symIdx = Math.floor(attractReelPositions[reel] + row) % theme.symbols.length;
+
+                // Dark cell background
+                ctx.fillStyle = '#111122';
+                ctx.fillRect(x, y, cellW, cellH);
+
+                // Draw the symbol
+                drawSymbol(symIdx, x, y, cellW, cellH);
+            }
+        }
+
+        // Restore original symbols
+        SYMBOLS = savedSymbols;
+
+        // Frame around demo reels
+        ctx.strokeStyle = theme.accentColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(gridX - 5, gridY - 5, 5 * (cellW + gap) + 6, 3 * (cellH + gap) + 6);
+
+        // Jackpot values display
+        ctx.save();
+        ctx.textAlign = 'center';
+        const jpY = 680;
+        const jpLabels = ['MEGA $10,000', 'MAJOR $1,000', 'MINOR $200', 'MINI $50'];
+        const jpColors = ['#FF2222', '#FFD700', '#44BBFF', '#44FF44'];
+        for (let i = 0; i < 4; i++) {
+            const jpX = 280 + i * 360;
+            ctx.fillStyle = jpColors[i];
+            ctx.font = 'bold 24px Arial';
+            ctx.shadowColor = jpColors[i];
+            ctx.shadowBlur = 10;
+            ctx.fillText(jpLabels[i], jpX, jpY);
+        }
+        ctx.shadowBlur = 0;
+        ctx.restore();
+
+        // Scrolling "INSERT BILL TO PLAY" text at the bottom
+        attractScrollX -= 2;
+        if (attractScrollX < -1200) attractScrollX = 1920;
+
+        ctx.save();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 40px Arial';
+        ctx.globalAlpha = 0.8 + Math.sin(attractTimer * 0.05) * 0.2;
+        ctx.fillText('INSERT BILL TO PLAY     ★     3 EXCITING THEMES     ★     PROGRESSIVE JACKPOTS     ★     SKILL FEATURES', attractScrollX, 800);
+        ctx.restore();
+
+        // Pulsing "PRESS ANY BUTTON" at very bottom
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.globalAlpha = 0.5 + Math.sin(attractTimer * 0.08) * 0.5;
+        ctx.fillStyle = '#AAAAAA';
+        ctx.font = '22px Arial';
+        ctx.fillText('PRESS ANY BUTTON TO START', 960, 900);
+        ctx.restore();
+
+        // Feature callouts cycle
+        const features = [
+            'HOLD & SPIN BONUS',
+            'NUDGE SKILL FEATURE',
+            'SYMBOL SWITCH SKILL',
+            '4-LEVEL PROGRESSIVE JACKPOTS',
+            'UP TO 96% RTP'
+        ];
+        const featureIdx = Math.floor(attractTimer / 180) % features.length;
+        ctx.save();
+        ctx.textAlign = 'center';
+        const featureAlpha = Math.sin((attractTimer % 180) / 180 * Math.PI);
+        ctx.globalAlpha = featureAlpha;
+        ctx.fillStyle = theme.accentColor;
+        ctx.font = 'bold 28px Arial';
+        ctx.fillText(features[featureIdx], 960, 960);
+        ctx.restore();
+    }
+
     // ===== ANIMATION LOOP =====
     // This runs 60 times per second using requestAnimationFrame (rAF)
     // It redraws everything every frame for smooth animation
     function gameLoop() {
+        // Count idle time (reset by any input)
+        idleTimer++;
+
+        // Activate attract mode after idle timeout (only from menu or game with 0 credits)
+        if (!attractActive && idleTimer >= ATTRACT_IDLE_TIME) {
+            if (gameScreen === 'menu' || (gameScreen === 'game' && credits === 0 && !isSpinning)) {
+                attractActive = true;
+                attractTimer = 0;
+                attractScrollX = 1920;
+            }
+        }
+
+        // Attract mode takes over the entire screen
+        if (attractActive) {
+            drawAttractMode();
+            requestAnimationFrame(gameLoop);
+            return;
+        }
+
         // If on theme selection screen, draw that instead of the game
         if (gameScreen === 'menu') {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
