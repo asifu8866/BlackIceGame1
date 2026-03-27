@@ -57,7 +57,7 @@
 > Performance optimization, testing, demo mode
 
 - [ ] Performance optimization for smooth 60fps on target hardware
-- [ ] Build demo/attract mode for idle cabinets
+- [x] Build demo/attract mode for idle cabinets
 - [ ] Final math verification (10M+ spin simulation)
 - [ ] GLI certification prep and documentation
 - [ ] Create operator manual and setup guide

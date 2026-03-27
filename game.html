@@ -37,6 +37,60 @@
        Main game file - everything lives here
        ============================================================= */
 
+    // ===== PERFORMANCE SYSTEM =====
+    // FPS counter and quality settings for smooth 60fps on target hardware.
+    // Shadow blur is the biggest bottleneck on Canvas — the quality toggle
+    // lets us disable it on lower-end machines while keeping the game playable.
+    let perfQuality = 'high';   // 'high' = all effects, 'low' = no shadows
+    let fpsFrames = 0;
+    let fpsLastTime = performance.now();
+    let fpsDisplay = 60;
+
+    // Update FPS counter (called each frame)
+    function updateFPS() {
+        fpsFrames++;
+        const now = performance.now();
+        if (now - fpsLastTime >= 1000) {
+            fpsDisplay = fpsFrames;
+            fpsFrames = 0;
+            fpsLastTime = now;
+            // Auto-downgrade quality if FPS drops below 45
+            if (fpsDisplay < 45 && perfQuality === 'high') {
+                perfQuality = 'low';
+                console.log('[PERF] Auto-switched to low quality (FPS: ' + fpsDisplay + ')');
+            }
+        }
+    }
+
+    // Helper: only apply shadow blur if quality is high
+    function setShadow(color, blur) {
+        if (perfQuality === 'high') {
+            ctx.shadowColor = color;
+            ctx.shadowBlur = blur;
+        }
+    }
+
+    function clearShadow() {
+        if (perfQuality === 'high') {
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    // Draw FPS counter in top-left (only visible in non-kiosk mode)
+    function drawFPS() {
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = fpsDisplay >= 55 ? '#44FF44' : fpsDisplay >= 30 ? '#FFAA00' : '#FF4444';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(fpsDisplay + ' FPS' + (perfQuality === 'low' ? ' [LOW]' : ''), 10, 20);
+        ctx.restore();
+    }
+
+    // Expose quality toggle for operator menu
+    window.setPerfQuality = function(q) { perfQuality = q; };
+
     // ===== CANVAS SETUP =====
     // The canvas is our drawing surface - like a digital whiteboard
     // We size it to 1920x1080 to match the cabinet monitor
@@ -815,29 +869,32 @@
         if (Math.random() < 0.3) spawnParticle();
 
         ctx.save();
-        for (let i = particles.length - 1; i >= 0; i--) {
+        // Use swap-and-pop removal instead of splice() for O(1) performance
+        let i = 0;
+        while (i < particles.length) {
             const p = particles[i];
             p.x += p.vx;
             p.y += p.vy;
             p.life -= p.speed;
 
             if (p.life <= 0) {
-                particles.splice(i, 1);
-                continue;
+                // Swap with last element and pop (O(1) instead of O(n) splice)
+                particles[i] = particles[particles.length - 1];
+                particles.pop();
+                continue; // re-check index i (now holds the swapped element)
             }
 
             ctx.globalAlpha = p.life * 0.6;
             ctx.fillStyle = p.color;
 
             if (currentTheme === 'ocean') {
-                // Draw as circle (bubble)
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
                 ctx.fill();
             } else {
-                // Draw as small rectangle (spark/ember)
                 ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size * p.life, p.size * p.life);
             }
+            i++;
         }
         ctx.restore();
     }
@@ -3223,6 +3280,8 @@
         drawOperatorMenu();   // operator settings overlay (when open)
         drawNetworkStatus();        // progressive network indicator (top-right corner)
         drawNetworkJackpotAlert();  // "JACKPOT WON!" banner when another cabinet wins
+        updateFPS();
+        drawFPS();
 
         // Request the next frame
         requestAnimationFrame(gameLoop);
