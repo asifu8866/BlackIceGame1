@@ -95,6 +95,7 @@
                     // Bill inserted - convert cents to credits (1 cent = 1 credit)
                     const creditsToAdd = msg.amount;
                     credits += creditsToAdd;
+                    if (typeof sasRecordBillIn === 'function') sasRecordBillIn(creditsToAdd);
                     playBillInsertSound();
                     console.log('[HARDWARE] Bill accepted: +' + creditsToAdd + ' credits');
                 }
@@ -1295,6 +1296,8 @@
         pool.current = pool.seed; // reset to starting value
         // If connected to progressive network, notify other cabinets
         if (typeof sendProgressiveAward === 'function') sendProgressiveAward(name, amount);
+        // Record in SAS meters
+        if (typeof sasRecordJackpot === 'function') sasRecordJackpot(name, amount);
         return amount;
     }
 
@@ -1362,6 +1365,7 @@
     // Start the Hold and Spin bonus round
     function triggerBonus() {
         gameMode = 'HOLD_AND_SPIN';
+        if (typeof sasRecordBonus === 'function') sasRecordBonus();
         bonusPhase = 'TRIGGER';
         bonusAnimTimer = 0;
         bonusRespins = 3;
@@ -1757,6 +1761,7 @@
         if (isSpinning) return;
 
         nudgeUsed = true;
+        if (typeof sasRecordNudge === 'function') sasRecordNudge();
         nudgeAnimating = true;
         nudgeReel = reelIndex;
         nudgeDirection = direction;
@@ -1927,6 +1932,7 @@
                 switchAnimating = true;
                 switchProgress = 0;
                 switchUsed = true;
+                if (typeof sasRecordSwitch === 'function') sasRecordSwitch();
 
                 // Clear any current win display
                 activeWins = [];
@@ -2641,6 +2647,7 @@
         if (credits <= 0) return;
         cashoutActive = true;
         cashoutAmount = credits;
+        if (typeof sasRecordCashout === 'function') sasRecordCashout(credits);
         // Send print command to TITO hardware (if bridge connected)
         printTITOTicket(credits);
         credits = 0;
@@ -2741,6 +2748,7 @@
         if (isSpinning) return;
         operatorMenuOpen = !operatorMenuOpen;
         menuSelection = 0;
+        if (operatorMenuOpen && typeof sasRecordDoorOpen === 'function') sasRecordDoorOpen();
     }
 
     // Handle up/down/select in the operator menu
@@ -2930,6 +2938,7 @@
             isSpinning = false;
             updateReelGrid();
             checkWins(); // look for winning paylines
+            if (typeof sasRecordSpin === 'function') sasRecordSpin(totalBet, lastWin); // SAS meter update
             checkBonusTrigger(); // check if Hold and Spin bonus should trigger
             enableNudge(); // allow player to nudge one reel
             enableSwitch(); // allow player to swap two adjacent symbols
@@ -3338,6 +3347,209 @@
 
     // Try to connect to the progressive jackpot relay on startup
     connectProgressiveJackpot();
+
+    // ===== SAS REPORTING SYSTEM =====
+    // Slot Accounting System - tracks all machine meters and events.
+    // Standard meter codes follow SAS protocol conventions so the data
+    // is familiar to gaming regulators and back-office systems.
+    //
+    // Meters are persisted to localStorage so they survive browser restarts.
+    // The back-office dashboard queries these via window.getSASReport().
+    //
+    // Meter codes (based on SAS long poll meter codes):
+    //   00 = Total coin in (credits wagered)
+    //   01 = Total coin out (credits paid)
+    //   02 = Total drop (bills inserted)
+    //   03 = Total jackpot (jackpot payouts)
+    //   04 = Games played
+    //   05 = Games won
+    //   06 = Total cancelled credits (cashouts)
+    //   10 = Current credits on machine
+    //   20 = Door open count
+    //   21 = Power reset count
+
+    const SAS_STORAGE_KEY = 'blackice_sas_meters';
+    const SAS_EVENT_KEY = 'blackice_sas_events';
+
+    // SAS meter registry
+    let sasMeters = {
+        coinIn: 0,          // 00: total credits wagered lifetime
+        coinOut: 0,         // 01: total credits paid lifetime
+        totalDrop: 0,       // 02: total bills/coins inserted
+        totalJackpot: 0,    // 03: total jackpot payouts
+        gamesPlayed: 0,     // 04: total spins
+        gamesWon: 0,        // 05: total winning spins
+        cancelledCredits: 0,// 06: total cashouts via TITO
+        doorOpens: 0,       // 20: number of times service menu opened
+        powerResets: 0,     // 21: number of times game loaded
+        bonusTriggered: 0,  // custom: Hold and Spin activations
+        nudgesUsed: 0,      // custom: skill nudge activations
+        switchesUsed: 0     // custom: skill switch activations
+    };
+
+    // Event log - last 500 events (FIFO)
+    let sasEvents = [];
+    const MAX_SAS_EVENTS = 500;
+
+    // Load saved meters from localStorage
+    function loadSASMeters() {
+        try {
+            const saved = localStorage.getItem(SAS_STORAGE_KEY);
+            if (saved) {
+                const data = JSON.parse(saved);
+                for (const key in data) {
+                    if (sasMeters.hasOwnProperty(key)) sasMeters[key] = data[key];
+                }
+            }
+            const events = localStorage.getItem(SAS_EVENT_KEY);
+            if (events) sasEvents = JSON.parse(events);
+        } catch (e) {
+            // Fresh start if localStorage is corrupt
+        }
+        // Count this page load as a power reset
+        sasMeters.powerResets++;
+        logSASEvent('POWER_ON', 'Game loaded');
+    }
+
+    // Save meters to localStorage
+    function saveSASMeters() {
+        try {
+            localStorage.setItem(SAS_STORAGE_KEY, JSON.stringify(sasMeters));
+            localStorage.setItem(SAS_EVENT_KEY, JSON.stringify(sasEvents));
+        } catch (e) {
+            // localStorage may be full or disabled
+        }
+    }
+
+    // Log a SAS event with timestamp
+    function logSASEvent(eventType, detail) {
+        const event = {
+            time: new Date().toISOString(),
+            type: eventType,
+            detail: detail,
+            credits: credits,
+            meter_coinIn: sasMeters.coinIn,
+            meter_coinOut: sasMeters.coinOut
+        };
+        sasEvents.push(event);
+        // Keep only last 500 events
+        if (sasEvents.length > MAX_SAS_EVENTS) {
+            sasEvents = sasEvents.slice(sasEvents.length - MAX_SAS_EVENTS);
+        }
+    }
+
+    // ===== SAS METER UPDATE HOOKS =====
+    // Called from game logic to update meters at key moments
+
+    // After every spin completes
+    function sasRecordSpin(betAmount, winAmount) {
+        sasMeters.coinIn += betAmount;
+        sasMeters.gamesPlayed++;
+        if (winAmount > 0) {
+            sasMeters.coinOut += winAmount;
+            sasMeters.gamesWon++;
+        }
+        // Sync with the existing lifetime counters
+        totalSpinsPlayed = sasMeters.gamesPlayed;
+        totalWageredLifetime = sasMeters.coinIn;
+        totalPaidLifetime = sasMeters.coinOut;
+        // Auto-save every 10 spins
+        if (sasMeters.gamesPlayed % 10 === 0) saveSASMeters();
+    }
+
+    // When a bill is inserted via hardware bridge
+    function sasRecordBillIn(amount) {
+        sasMeters.totalDrop += amount;
+        logSASEvent('BILL_IN', 'Amount: ' + amount);
+        saveSASMeters();
+    }
+
+    // When a jackpot is awarded
+    function sasRecordJackpot(name, amount) {
+        sasMeters.totalJackpot += amount;
+        logSASEvent('JACKPOT', name + ' won: ' + amount);
+        saveSASMeters();
+    }
+
+    // When player cashes out via TITO
+    function sasRecordCashout(amount) {
+        sasMeters.cancelledCredits += amount;
+        logSASEvent('CASHOUT', 'Amount: ' + amount);
+        saveSASMeters();
+    }
+
+    // When Hold and Spin bonus triggers
+    function sasRecordBonus() {
+        sasMeters.bonusTriggered++;
+        logSASEvent('BONUS', 'Hold and Spin triggered');
+    }
+
+    // When nudge skill is used
+    function sasRecordNudge() {
+        sasMeters.nudgesUsed++;
+        logSASEvent('NUDGE', 'Nudge skill used');
+    }
+
+    // When symbol switch skill is used
+    function sasRecordSwitch() {
+        sasMeters.switchesUsed++;
+        logSASEvent('SWITCH', 'Symbol switch skill used');
+    }
+
+    // When operator opens service menu
+    function sasRecordDoorOpen() {
+        sasMeters.doorOpens++;
+        logSASEvent('DOOR_OPEN', 'Operator menu accessed');
+        saveSASMeters();
+    }
+
+    // ===== SAS REPORT GENERATOR =====
+    // Returns a complete machine accounting report.
+    // Called by the back-office dashboard or from the browser console.
+    function getSASReport() {
+        const report = {
+            machineId: machineId,
+            reportTime: new Date().toISOString(),
+            currentRTP: currentRTP + '%',
+            currentTheme: currentTheme,
+            currentCredits: credits,
+            meters: {
+                '00_coinIn': sasMeters.coinIn,
+                '01_coinOut': sasMeters.coinOut,
+                '02_totalDrop': sasMeters.totalDrop,
+                '03_totalJackpot': sasMeters.totalJackpot,
+                '04_gamesPlayed': sasMeters.gamesPlayed,
+                '05_gamesWon': sasMeters.gamesWon,
+                '06_cancelledCredits': sasMeters.cancelledCredits,
+                '10_currentCredits': credits,
+                '20_doorOpens': sasMeters.doorOpens,
+                '21_powerResets': sasMeters.powerResets,
+                'custom_bonusTriggered': sasMeters.bonusTriggered,
+                'custom_nudgesUsed': sasMeters.nudgesUsed,
+                'custom_switchesUsed': sasMeters.switchesUsed
+            },
+            calculated: {
+                actualRTP: sasMeters.coinIn > 0 ? ((sasMeters.coinOut / sasMeters.coinIn) * 100).toFixed(2) + '%' : 'N/A',
+                hitFrequency: sasMeters.gamesPlayed > 0 ? ((sasMeters.gamesWon / sasMeters.gamesPlayed) * 100).toFixed(2) + '%' : 'N/A',
+                avgBet: sasMeters.gamesPlayed > 0 ? (sasMeters.coinIn / sasMeters.gamesPlayed).toFixed(1) : 'N/A',
+                houseHold: sasMeters.coinIn > 0 ? (((sasMeters.coinIn - sasMeters.coinOut) / sasMeters.coinIn) * 100).toFixed(2) + '%' : 'N/A',
+                bonusRate: sasMeters.bonusTriggered > 0 ? Math.round(sasMeters.gamesPlayed / sasMeters.bonusTriggered) + ' spins/bonus' : 'N/A'
+            },
+            recentEvents: sasEvents.slice(-20)
+        };
+        return report;
+    }
+
+    // Make SAS report accessible from console and from the dashboard
+    window.getSASReport = getSASReport;
+    window.sasMeters = sasMeters;
+    window.sasEvents = sasEvents;
+
+    // Load meters on startup
+    loadSASMeters();
+
+    // Auto-save meters every 60 seconds
+    setInterval(saveSASMeters, 60000);
 
     </script>
 </body>
