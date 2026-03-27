@@ -31,11 +31,21 @@
 <body>
     <canvas id="gameCanvas"></canvas>
 
+    <script src="blackice-math-engine.js"></script>
     <script>
     /* =============================================================
        BLACK ICE GAMING - GAME 1
-       Main game file - everything lives here
+       Visual layer — rendering, animation, input, hardware I/O.
+       All game math lives in blackice-math-engine.js (BlackIceMath).
        ============================================================= */
+
+    // ===== MATH ENGINE ALIASES =====
+    // Convenience references to commonly used BlackIceMath values
+    var BM = BlackIceMath;
+    var NUM_REELS = BM.reels.NUM_REELS;
+    var NUM_ROWS = BM.reels.NUM_ROWS;
+    var STRIP_LENGTH = BM.reels.STRIP_LENGTH;
+    var PAYLINES = BM.pay.LINES;
 
     // ===== PERFORMANCE SYSTEM =====
     // FPS counter and quality settings for smooth 60fps on target hardware.
@@ -480,142 +490,46 @@
     }
 
     // ===== REEL LAYOUT =====
-    // 5 reels, 3 visible rows each - this is what the player sees
-    const NUM_REELS = 5;
-    const NUM_ROWS = 3;
+    // 5 reels, 3 visible rows each — dimensions come from BlackIceMath
+    // NUM_REELS and NUM_ROWS are aliased at the top of this file.
 
-    // ===== RTP SETTING =====
-    // Operator selects one of three Return To Player percentages
-    // This controls which reel strips are used
-    // 88 = tighter hold (12% profit), 92 = medium, 96 = loose (4% profit)
-    let currentRTP = 92; // default to medium - operator changes in settings menu
-
-    // ===== REEL STRIP WEIGHT TABLES =====
-    // These are the heart of the game math. Each reel strip is a carefully
-    // designed sequence of symbols. The number of times each symbol appears
-    // on each reel determines how often winning combinations line up.
-    //
-    // Symbol index reference:
-    // 0=CHERRY, 1=BAR, 2=DOUBLE_BAR, 3=TRIPLE_BAR, 4=SEVEN,
-    // 5=BELL, 6=DIAMOND, 7=WILD, 8=FIREBALL, 9=BLANK
-    //
-    // Design targets (modeled after Fire Link):
-    // - Hit frequency: ~32% (one in three spins wins something)
-    // - Volatility: Medium (frequent small wins + rare big wins)
-    // - CHERRY appears most often (low value, high frequency)
-    // - SEVEN is rare (high value)
-    // - WILD is scarce but impactful (substitutes for all except SEVEN)
-    // - FIREBALL appears enough to trigger Hold and Spin every 80-120 spins
-    // - BLANK fills gaps to control hit frequency
-    //
-    // Each reel has 32 stops. With 5 reels that gives us 32^5 = 33,554,432
-    // possible combinations per spin - enough resolution for precise RTP.
-
-    // ----- 88% RTP STRIPS (tighter - house keeps 12%) -----
-    // Based on 92% strips. Reel 1 and Reel 3: one WILD(7) replaced with BLANK(9).
-    // This removes 2 WILDs from the game = fewer substitute wins = lower RTP.
-    // All other symbols identical to 92% strips.
-    const STRIPS_88 = [
-        // Reel 1 (unchanged from 92%)
-        [0,9,1,9,0,9,5,9,2,9,0,8,9,0,9,1,9,5,0,9,3,9,0,9,7,9,0,9,1,9,6,0,9,2,9,0,9,5,0,9,7,9,0,9,4,9,0,9],
-        // Reel 2 (unchanged from 92%)
-        [9,0,9,1,0,9,5,9,2,0,9,9,0,8,9,1,9,0,5,9,0,3,9,7,9,0,9,6,0,9,1,9,0,9,2,9,0,9,5,0,9,7,9,0,9,1,0,9],
-        // Reel 3 (1 WILD at pos 23 -> BLANK, 1 WILD at pos 37 kept)
-        [0,9,5,9,1,0,9,2,9,0,9,8,0,9,1,9,0,5,9,3,9,0,9,9,0,9,6,9,1,0,9,0,5,9,2,0,9,7,9,0,9,1,0,9,0,9,5,9],
-        // Reel 4 (unchanged from 92%)
-        [9,0,1,9,5,0,9,2,9,0,9,0,8,9,1,9,0,9,5,0,9,3,9,7,0,9,0,6,9,1,9,0,9,2,0,9,5,9,0,7,9,0,9,1,9,0,4,9],
-        // Reel 5 (unchanged from 92%)
-        [0,9,1,9,0,5,9,0,2,9,8,9,0,9,1,0,9,5,9,0,3,9,7,0,9,6,9,0,1,9,0,9,5,0,9,2,9,0,7,9,0,9,1,4,9,0,9,5]
-    ];
-
-    // ----- 92% RTP STRIPS (medium - house keeps 8%) -----
-    // Symbol composition per reel (48 stops):
-    // CHERRY(0):13 BAR(1):4 2BAR(2):3 3BAR(3):1 SEVEN(4):1 BELL(5):3
-    // DIAMOND(6):1 WILD(7):2 FIREBALL(8):2 BLANK(9):18
-    // Strategy: balanced mix, 2 wilds help create more winning combos
-    const STRIPS_92 = [
-        // Reel 1
-        [0,9,1,9,0,9,5,9,2,9,0,8,9,0,9,1,9,5,0,9,3,9,0,9,7,9,0,9,1,9,6,0,9,2,9,0,9,5,0,9,7,9,0,9,4,9,0,9],
-        // Reel 2
-        [9,0,9,1,0,9,5,9,2,0,9,9,0,8,9,1,9,0,5,9,0,3,9,7,9,0,9,6,0,9,1,9,0,9,2,9,0,9,5,0,9,7,9,0,9,1,0,9],
-        // Reel 3
-        [0,9,5,9,1,0,9,2,9,0,9,8,0,9,1,9,0,5,9,3,9,0,9,7,0,9,6,9,1,0,9,0,5,9,2,0,9,7,9,0,9,1,0,9,0,9,5,9],
-        // Reel 4
-        [9,0,1,9,5,0,9,2,9,0,9,0,8,9,1,9,0,9,5,0,9,3,9,7,0,9,0,6,9,1,9,0,9,2,0,9,5,9,0,7,9,0,9,1,9,0,4,9],
-        // Reel 5
-        [0,9,1,9,0,5,9,0,2,9,8,9,0,9,1,0,9,5,9,0,3,9,7,0,9,6,9,0,1,9,0,9,5,0,9,2,9,0,7,9,0,9,1,4,9,0,9,5]
-    ];
-
-    // ----- 96% RTP STRIPS (loose - house keeps 4%) -----
-    // Based on 92% strips. Reels 2 and 4: one BLANK(9) replaced with CHERRY(0).
-    // Tiny increase in low-value wins pushes RTP from 92% up toward 96%.
-    const STRIPS_96 = [
-        // Reel 1 (unchanged from 92%)
-        [0,9,1,9,0,9,5,9,2,9,0,8,9,0,9,1,9,5,0,9,3,9,0,9,7,9,0,9,1,9,6,0,9,2,9,0,9,5,0,9,7,9,0,9,4,9,0,9],
-        // Reel 2 (unchanged from 92%)
-        [9,0,9,1,0,9,5,9,2,0,9,9,0,8,9,1,9,0,5,9,0,3,9,7,9,0,9,6,0,9,1,9,0,9,2,9,0,9,5,0,9,7,9,0,9,1,0,9],
-        // Reel 3 (BLANK at pos 38 -> CHERRY - 1 extra cherry on middle reel)
-        [0,9,5,9,1,0,9,2,9,0,9,8,0,9,1,9,0,5,9,3,9,0,9,7,0,9,6,9,1,0,9,0,5,9,2,0,9,7,0,0,9,1,0,9,0,9,5,9],
-        // Reel 4 (unchanged from 92%)
-        [9,0,1,9,5,0,9,2,9,0,9,0,8,9,1,9,0,9,5,0,9,3,9,7,0,9,0,6,9,1,9,0,9,2,0,9,5,9,0,7,9,0,9,1,9,0,4,9],
-        // Reel 5 (unchanged from 92%)
-        [0,9,1,9,0,5,9,0,2,9,8,9,0,9,1,0,9,5,9,0,3,9,7,0,9,6,9,0,1,9,0,9,5,0,9,2,9,0,7,9,0,9,1,4,9,0,9,5]
-    ];
-
-    // ----- 86% RTP STRIPS (tightest - house keeps 14%) -----
-    // Based on 88% strips (1 WILD removed from reel 3) plus 1 extra BLANK
-    // added to each reel (49 stops instead of 48). The extra blank dilutes
-    // all symbol frequencies slightly, bringing RTP down ~2% from 88%.
-    const STRIPS_86 = [
-        // Reel 1 (= 88% Reel 1, unchanged, 48 stops)
-        [0,9,1,9,0,9,5,9,2,9,0,8,9,0,9,1,9,5,0,9,3,9,0,9,7,9,0,9,1,9,6,0,9,2,9,0,9,5,0,9,7,9,0,9,4,9,0,9],
-        // Reel 2 (88% Reel 2 but CHERRY at pos 4 -> BLANK - 1 less cherry)
-        [9,0,9,1,9,9,5,9,2,0,9,9,0,8,9,1,9,0,5,9,0,3,9,7,9,0,9,6,0,9,1,9,0,9,2,9,0,9,5,0,9,7,9,0,9,1,0,9],
-        // Reel 3 (= 88% Reel 3, unchanged - already missing 1 WILD)
-        [0,9,5,9,1,0,9,2,9,0,9,8,0,9,1,9,0,5,9,3,9,0,9,9,0,9,6,9,1,0,9,0,5,9,2,0,9,7,9,0,9,1,0,9,0,9,5,9],
-        // Reel 4 (= 88% Reel 4, unchanged)
-        [9,0,1,9,5,0,9,2,9,0,9,0,8,9,1,9,0,9,5,0,9,3,9,7,0,9,0,6,9,1,9,0,9,2,0,9,5,9,0,7,9,0,9,1,9,0,4,9],
-        // Reel 5 (= 88% Reel 5, unchanged)
-        [0,9,1,9,0,5,9,0,2,9,8,9,0,9,1,0,9,5,9,0,3,9,7,0,9,6,9,0,1,9,0,9,5,0,9,2,9,0,7,9,0,9,1,4,9,0,9,5]
-    ];
-
-    // Get the active reel strips based on current RTP setting
-    function getActiveStrips() {
-        if (currentRTP === 86) return STRIPS_86;
-        if (currentRTP === 88) return STRIPS_88;
-        if (currentRTP === 96) return STRIPS_96;
-        return STRIPS_92; // default
-    }
-
-    // Copy the active strips into the working reel strip arrays
+    // ===== REEL STRIPS (delegated to math engine) =====
+    // All strip data, RTP switching, and strip selection now live in BlackIceMath.
+    // We keep local working copies for the visual scroll animation.
     let reelStrips = [];
-    let REEL_STRIP_LENGTH = 32;
+    let REEL_STRIP_LENGTH = STRIP_LENGTH;
+
+    function getActiveStrips() {
+        return BM.reels.getActiveStrips();
+    }
 
     function loadReelStrips() {
         const strips = getActiveStrips();
         reelStrips = [];
         for (let r = 0; r < NUM_REELS; r++) {
-            reelStrips[r] = strips[r].slice(); // copy so we don't modify originals
+            reelStrips[r] = strips[r].slice();
         }
         REEL_STRIP_LENGTH = reelStrips[0].length;
     }
     loadReelStrips(); // load the default strips on startup
 
-    // ===== RTP SWITCHING =====
-    // Call this to change the RTP (will take effect on next spin)
+    // Convenience: read/write RTP through the math engine
     function setRTP(rtp) {
-        if (rtp === 88 || rtp === 92 || rtp === 96) {
-            currentRTP = rtp;
-            loadReelStrips();
-        }
+        BM.reels.setRTP(rtp);
+        loadReelStrips();
     }
+    // currentRTP is now a getter for display purposes
+    Object.defineProperty(window, 'currentRTP', {
+        get: function() { return BM.reels.getRTP(); },
+        set: function(v) { BM.reels.setRTP(v); loadReelStrips(); }
+    });
 
     // ===== REEL STATE =====
     // Each reel tracks where it is on the strip and how fast it's moving
     const reels = [];
     for (let r = 0; r < NUM_REELS; r++) {
         reels[r] = {
-            position: Math.floor(Math.random() * REEL_STRIP_LENGTH), // current stop position on strip
+            position: BM.rng.randomInt(REEL_STRIP_LENGTH), // current stop position on strip
             offset: 0,          // pixel offset for smooth scrolling (0 = symbol fully aligned)
             speed: 0,           // current scroll speed in pixels per frame
             spinning: false,    // is this reel currently spinning?
@@ -701,8 +615,8 @@
             reels[r].speed = 0;
             reels[r].bounceBack = 0;
             reels[r].bouncePhase = 0;
-            // Pick a random landing spot at least 2 full rotations away
-            reels[r].targetPosition = Math.floor(Math.random() * REEL_STRIP_LENGTH);
+            // Pick a random landing spot using the math engine's CSPRNG
+            reels[r].targetPosition = BM.rng.randomInt(REEL_STRIP_LENGTH);
         }
 
         // Ramp up speed over SPIN_UP_TIME, then schedule stops left to right
@@ -1232,34 +1146,17 @@
         }
     }
 
-    // ===== PAYTABLE =====
-    // How much each symbol pays for 3, 4, or 5 of a kind on a payline
-    // Values are multipliers of the bet-per-line
-    // Modeled after Fire Link by Light & Wonder
-    //
-    // Example: If bet is 10 credits across 10 lines (1 per line),
-    // and you hit 3 CHERRY on a line, you win 1 x 5 = 5 credits
-    const PAYTABLE = {
-        // Symbol name:    [3-of-a-kind, 4-of-a-kind, 5-of-a-kind]
-        // Values are credits won per line (betPerLine = 1)
-        // Tuned with 200K spin simulation to hit RTP targets
-        'CHERRY':          [5,    12,    45],      // low value - hits often
-        'BAR':             [9,    28,    90],      // low-mid
-        'DOUBLE_BAR':      [14,   45,    180],     // mid
-        'TRIPLE_BAR':      [23,   70,    275],     // mid-high
-        'BELL':            [23,   70,    275],     // mid-high (same as triple bar)
-        'DIAMOND':         [45,   140,   460],     // high value
-        'SEVEN':           [90,   450,   1800],    // jackpot symbol - very rare, huge payout
-        'WILD':            [9,    45,    180]      // WILD line (all wilds) pays like DOUBLE_BAR
-        // FIREBALL and BLANK are not line-pay symbols
-    };
+    // ===== PAYTABLE (from math engine) =====
+    // Paytable data now lives in BlackIceMath.pay.TABLE
+    var PAYTABLE = BM.pay.TABLE;
 
     // ===== CREDIT SYSTEM =====
     // Track the player's balance, current bet, and last win
-    let credits = 1000;      // starting balance
-    let betPerLine = 1;      // credits wagered on each payline
-    let totalBet = 10;       // betPerLine x 10 paylines (deducted each spin)
-    let lastWin = 0;         // total win from the most recent spin
+    // Default bet comes from the math engine
+    let credits = 1000;                    // starting balance
+    let betPerLine = 1;                    // credits wagered on each payline
+    let totalBet = BM.pay.DEFAULT_BET;     // betPerLine x paylines (from math engine)
+    let lastWin = 0;                       // total win from the most recent spin
 
     // Format a number with commas for display (1000 -> "1,000")
     function formatCredits(num) {
@@ -1290,67 +1187,51 @@
     const BONUS_RESPIN_DURATION = 48;    // 0.8 seconds for respin shimmer animation
     const BONUS_AWARD_DURATION = 180;    // 3 seconds for award count-up
 
-    // --- Trigger timing ---
-    // Roll a random number between 80 and 120 for when the next bonus triggers
+    // --- Trigger timing (delegated to math engine) ---
     function rollNextBonusTrigger() {
-        nextBonusTrigger = 80 + Math.floor(Math.random() * 41);
+        nextBonusTrigger = BM.bonus.rollNextTrigger();
     }
     rollNextBonusTrigger(); // set the first trigger target
 
-    // --- Fireball credit value tables ---
-    // Each fireball shows a credit value when it locks on the grid
-    // Values are multiplied by the total bet (so higher bets = bigger values)
-    const FIREBALL_VALUE_TABLE = [
-        { mult: 1,   weight: 30 },   // very common (1x bet = 10 credits at bet 10)
-        { mult: 1.5, weight: 25 },   // common (15 credits)
-        { mult: 2,   weight: 20 },   // common (20 credits)
-        { mult: 3,   weight: 12 },   // uncommon (30 credits)
-        { mult: 5,   weight: 8 },    // uncommon (50 credits)
-        { mult: 10,  weight: 3 },    // rare (100 credits)
-        { mult: 20,  weight: 1.5 },  // very rare (200 credits)
-    ];
+    // --- Jackpot tiers (from math engine, used for display colors) ---
+    var JACKPOT_VALUES = BM.jackpots.TIERS;
 
-    // Jackpot tiers (matches the jackpot bar at the top of the machine)
-    const JACKPOT_VALUES = [
-        { name: 'MINI',  value: 50,    color: '#44FF44', weight: 60 },  // hits most often
-        { name: 'MINOR', value: 200,   color: '#44BBFF', weight: 25 },
-        { name: 'MAJOR', value: 1000,  color: '#FFD700', weight: 12 },
-        { name: 'MEGA',  value: 10000, color: '#FF2222', weight: 3 },   // ultra rare
-    ];
-
-    // ===== LIVE JACKPOT SYSTEM =====
-    // Jackpots are progressive - a small % of each bet feeds into each pool.
-    // When a jackpot fireball hits during Hold and Spin, the player wins
-    // the current live value, then it resets to the seed amount.
-    //
-    // Seed = starting value after a jackpot is won
-    // Feed = percentage of each bet that goes into this jackpot pool
-    const jackpotPools = {
-        'MINI':  { current: 50,    seed: 50,    feed: 0.005 },  // 0.5% of bet → MINI
-        'MINOR': { current: 200,   seed: 200,   feed: 0.003 },  // 0.3% of bet → MINOR
-        'MAJOR': { current: 1000,  seed: 1000,  feed: 0.001 },  // 0.1% of bet → MAJOR
-        'MEGA':  { current: 10000, seed: 10000, feed: 0.001 },  // 0.1% of bet → MEGA
-    };
-
-    // Feed all jackpot pools from the current bet (called each normal spin)
-    function feedJackpots() {
-        for (const name in jackpotPools) {
-            const pool = jackpotPools[name];
-            // Add a small fraction of the bet to each pool
-            // Random variation so the numbers tick up at different rates
-            pool.current += totalBet * pool.feed * (0.8 + Math.random() * 0.4);
-            // Round to nearest cent for clean display
-            pool.current = Math.round(pool.current * 100) / 100;
+    // --- Live jackpot pools (managed by math engine) ---
+    // The visual layer reads pools via BM.jackpots.getPools() for display.
+    // We define a getter-based jackpotPools proxy so existing drawing code
+    // (drawJackpotBar, progressive network sync) still works unchanged.
+    var jackpotPools = new Proxy({}, {
+        get: function(target, name) {
+            var pools = BM.jackpots.getPools();
+            if (name in pools) {
+                // Return an object with .current so drawJackpotBar() can read pool.current
+                return { current: pools[name] };
+            }
+            // Fall through for 'then', 'toJSON', Symbol keys, etc.
+            return undefined;
+        },
+        ownKeys: function() {
+            return Object.keys(BM.jackpots.getPools());
+        },
+        getOwnPropertyDescriptor: function(target, name) {
+            var pools = BM.jackpots.getPools();
+            if (name in pools) {
+                return { configurable: true, enumerable: true, value: { current: pools[name] } };
+            }
+            return undefined;
         }
+    });
+
+    // Feed all jackpot pools from the current bet (delegated to math engine)
+    function feedJackpots() {
+        BM.jackpots.feed(totalBet);
         // If connected to progressive network, send feed to shared pool
         if (typeof sendProgressiveFeed === 'function') sendProgressiveFeed();
     }
 
-    // Award a jackpot and reset it to the seed value
+    // Award a jackpot and reset it to the seed value (delegated to math engine)
     function awardJackpot(name) {
-        const pool = jackpotPools[name];
-        const amount = Math.floor(pool.current);
-        pool.current = pool.seed; // reset to starting value
+        var amount = BM.jackpots.award(name);
         // If connected to progressive network, notify other cabinets
         if (typeof sendProgressiveAward === 'function') sendProgressiveAward(name, amount);
         // Record in SAS meters
@@ -1358,55 +1239,9 @@
         return amount;
     }
 
-    const JACKPOT_CHANCE = 0.03;           // 3% chance each fireball is a jackpot
-    const BONUS_FIREBALL_CHANCE = 0.20;    // 20% chance per empty cell per respin
-    const BONUS_INITIAL_FIREBALLS = 6;     // how many fireballs appear when bonus triggers
-
-    // Pick a random credit value for a fireball
+    // Pick a random credit value for a fireball (delegated to math engine)
     function randomFireballValue() {
-        // Small chance to be a jackpot instead of regular credits
-        if (Math.random() < JACKPOT_CHANCE) {
-            return randomJackpotValue();
-        }
-
-        // Weighted random selection from the value table
-        const totalWeight = FIREBALL_VALUE_TABLE.reduce((sum, v) => sum + v.weight, 0);
-        let roll = Math.random() * totalWeight;
-        for (const entry of FIREBALL_VALUE_TABLE) {
-            roll -= entry.weight;
-            if (roll <= 0) {
-                const creditValue = Math.round(entry.mult * totalBet);
-                return { value: creditValue, label: formatCredits(creditValue), color: '#FFFFFF', isJackpot: false };
-            }
-        }
-        return { value: totalBet, label: formatCredits(totalBet), color: '#FFFFFF', isJackpot: false };
-    }
-
-    // Pick a random jackpot level (weighted - MINI hits most often)
-    // Awards the LIVE jackpot amount from the pool, then resets it
-    function randomJackpotValue() {
-        const totalWeight = JACKPOT_VALUES.reduce((sum, j) => sum + j.weight, 0);
-        let roll = Math.random() * totalWeight;
-        for (const jp of JACKPOT_VALUES) {
-            roll -= jp.weight;
-            if (roll <= 0) {
-                const amount = awardJackpot(jp.name); // grab live value and reset pool
-                return { value: amount, label: jp.name, color: jp.color, isJackpot: true, jackpotName: jp.name };
-            }
-        }
-        const amount = awardJackpot('MINI');
-        return { value: amount, label: 'MINI', color: '#44FF44', isJackpot: true, jackpotName: 'MINI' };
-    }
-
-    // Create an empty 5x3 bonus grid (all cells null)
-    function initBonusGrid() {
-        bonusGrid = [];
-        for (let r = 0; r < NUM_REELS; r++) {
-            bonusGrid[r] = [];
-            for (let row = 0; row < NUM_ROWS; row++) {
-                bonusGrid[r][row] = null;
-            }
-        }
+        return BM.bonus.randomFireballValue(totalBet);
     }
 
     // Check if the bonus should trigger after a normal spin finishes
@@ -1425,7 +1260,7 @@
         if (typeof sasRecordBonus === 'function') sasRecordBonus();
         bonusPhase = 'TRIGGER';
         bonusAnimTimer = 0;
-        bonusRespins = 3;
+        bonusRespins = BM.bonus.RESPINS;
         bonusTotalWin = 0;
         bonusNewLands = [];
 
@@ -1434,27 +1269,25 @@
         showingWins = false;
         winDisplayIndex = -1;
 
-        initBonusGrid();
-
-        // Build a list of all 15 grid positions, shuffle, pick first 6
+        // Build a list of all 15 grid positions, shuffle via math engine
         const positions = [];
         for (let r = 0; r < NUM_REELS; r++) {
             for (let row = 0; row < NUM_ROWS; row++) {
                 positions.push({ reel: r, row: row });
             }
         }
-        // Fisher-Yates shuffle for true randomness
-        for (let i = positions.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [positions[i], positions[j]] = [positions[j], positions[i]];
-        }
+        const shuffled = BM.rng.shuffle(positions);
 
-        // Place the initial fireballs
-        for (let i = 0; i < BONUS_INITIAL_FIREBALLS; i++) {
-            const pos = positions[i];
-            const fbValue = randomFireballValue();
-            bonusGrid[pos.reel][pos.row] = fbValue;
-            bonusTotalWin += fbValue.value;
+        // Pick initial fireball positions
+        const fireballPositions = shuffled.slice(0, BM.bonus.INITIAL_FIREBALLS);
+
+        // Use math engine to build the initial bonus grid with values
+        bonusGrid = BM.bonus.initGrid(fireballPositions, totalBet);
+
+        // Calculate total and record new lands for flash animation
+        for (let i = 0; i < fireballPositions.length; i++) {
+            const pos = fireballPositions[i];
+            bonusTotalWin += bonusGrid[pos.reel][pos.row].value;
             bonusNewLands.push(pos);
         }
 
@@ -1470,48 +1303,29 @@
         playSpinStartSound();
     }
 
-    // Resolve the bonus respin - determine which empty cells get new fireballs
+    // Resolve the bonus respin - delegated to math engine
     function resolveBonusRespin() {
-        let gotNewFireball = false;
+        var result = BM.bonus.resolveRespin(bonusGrid, totalBet);
 
-        // Each empty cell independently rolls for a fireball
-        for (let r = 0; r < NUM_REELS; r++) {
-            for (let row = 0; row < NUM_ROWS; row++) {
-                if (bonusGrid[r][row] === null) {
-                    if (Math.random() < BONUS_FIREBALL_CHANCE) {
-                        const fbValue = randomFireballValue();
-                        bonusGrid[r][row] = fbValue;
-                        bonusTotalWin += fbValue.value;
-                        bonusNewLands.push({ reel: r, row: row });
-                        gotNewFireball = true;
-                    }
-                }
-            }
-        }
+        // Apply the updated grid from the math engine
+        bonusGrid = result.grid;
+        bonusNewLands = result.newLands;
+        bonusTotalWin = result.totalValue;
 
-        if (gotNewFireball) {
-            // Any new fireball resets the counter back to 3
-            bonusRespins = 3;
+        if (result.gotNewFireball) {
+            bonusRespins = BM.bonus.RESPINS; // reset counter
             playBonusLandSound();
         } else {
             bonusRespins--;
         }
 
-        // Check if grid is completely full (Grand Prize!)
-        let allFull = true;
-        for (let r = 0; r < NUM_REELS; r++) {
-            for (let row = 0; row < NUM_ROWS; row++) {
-                if (bonusGrid[r][row] === null) { allFull = false; break; }
-            }
-            if (!allFull) break;
-        }
-        if (allFull) {
+        if (result.isFull) {
             // Full grid = award the live MEGA jackpot on top of all collected values
             bonusTotalWin += awardJackpot('MEGA');
         }
 
         // End bonus if out of respins or grid is full
-        if (bonusRespins <= 0 || allFull) {
+        if (bonusRespins <= 0 || result.isFull) {
             bonusPhase = 'AWARD';
             bonusAnimTimer = 0;
             playWinSound();
@@ -2278,21 +2092,8 @@
         }
     }
 
-    // ===== PAYLINE DEFINITIONS =====
-    // 10 paylines - each is an array of 5 row positions (0=top, 1=mid, 2=bot)
-    // These define the patterns players can win on
-    const PAYLINES = [
-        [1, 1, 1, 1, 1],  // Line 1: straight middle
-        [0, 0, 0, 0, 0],  // Line 2: straight top
-        [2, 2, 2, 2, 2],  // Line 3: straight bottom
-        [0, 1, 2, 1, 0],  // Line 4: V shape
-        [2, 1, 0, 1, 2],  // Line 5: inverted V
-        [0, 0, 1, 2, 2],  // Line 6: diagonal down
-        [2, 2, 1, 0, 0],  // Line 7: diagonal up
-        [1, 0, 0, 0, 1],  // Line 8: top hat
-        [1, 2, 2, 2, 1],  // Line 9: bottom hat
-        [1, 0, 1, 0, 1]   // Line 10: zigzag
-    ];
+    // ===== PAYLINE DEFINITIONS (from math engine) =====
+    // PAYLINES is aliased at the top of this file from BM.pay.LINES
 
     // Colors for each payline so they're easy to tell apart
     const PAYLINE_COLORS = [
@@ -2313,70 +2114,24 @@
         activeWins = [];
         if (isSpinning) return;
 
-        for (let p = 0; p < PAYLINES.length; p++) {
-            const line = PAYLINES[p];
-
-            // Get the symbol on this payline for each reel
-            const lineSymbols = [];
-            for (let r = 0; r < NUM_REELS; r++) {
-                lineSymbols.push(reelGrid[r][line[r]]);
-            }
-
-            // Check for 3, 4, or 5 matching symbols from left to right
-            // WILD substitutes for anything except SEVEN
-            const firstSym = lineSymbols[0];
-            let matchCount = 1;
-
-            for (let r = 1; r < NUM_REELS; r++) {
-                const sym = lineSymbols[r];
-                const isWild = SYMBOLS[sym].name === 'WILD';
-                const firstIsWild = SYMBOLS[firstSym].name === 'WILD';
-
-                // Skip FIREBALL and BLANK - they don't count for line wins
-                if (SYMBOLS[firstSym].name === 'FIREBALL' || SYMBOLS[firstSym].name === 'BLANK') break;
-                if (SYMBOLS[sym].name === 'FIREBALL' || SYMBOLS[sym].name === 'BLANK') break;
-
-                // Match if same symbol, or if either is WILD (but WILD can't sub for SEVEN)
-                const sevenInvolved = SYMBOLS[firstSym].name === 'SEVEN' || SYMBOLS[sym].name === 'SEVEN';
-                if (sym === firstSym ||
-                    (isWild && !sevenInvolved) ||
-                    (firstIsWild && !sevenInvolved)) {
-                    matchCount++;
-                } else {
-                    break; // chain broken
-                }
-            }
-
-            // Need at least 3 in a row to win
-            if (matchCount >= 3) {
-                // Look up the payout from the paytable
-                // Use the first non-WILD symbol to determine pay
-                let paySymbol = SYMBOLS[firstSym].name;
-                if (paySymbol === 'WILD') {
-                    // If the line starts with WILD, find the first real symbol
-                    for (let r = 1; r < matchCount; r++) {
-                        const sName = SYMBOLS[lineSymbols[r]].name;
-                        if (sName !== 'WILD') { paySymbol = sName; break; }
-                    }
-                }
-
-                const payEntry = PAYTABLE[paySymbol];
-                const payout = payEntry ? payEntry[matchCount - 3] * betPerLine : 0;
-
-                activeWins.push({
-                    paylineIndex: p,
-                    matchCount: matchCount,
-                    symbolIndex: firstSym,
-                    paySymbol: paySymbol,
-                    payout: payout
-                });
-            }
-        }
-
-        // Add up total win from all winning paylines
+        // Delegate win detection to the math engine
+        // Engine returns [{line, symbol, count, payout, positions}, ...]
+        // Drawing code expects {paylineIndex, matchCount, paySymbol, payout}
+        var engineWins = BM.spin.checkWins(reelGrid, betPerLine);
         lastWin = 0;
-        for (const win of activeWins) {
-            lastWin += win.payout;
+        for (var i = 0; i < engineWins.length; i++) {
+            var ew = engineWins[i];
+            activeWins.push({
+                paylineIndex: ew.line,
+                matchCount: ew.count,
+                paySymbol: ew.symbol,
+                payout: ew.payout,
+                // Keep engine properties for game recall
+                line: ew.line,
+                symbol: ew.symbol,
+                count: ew.count
+            });
+            lastWin += ew.payout;
         }
 
         // Award winnings to the player's balance
@@ -3296,138 +3051,9 @@
     // Start the animation loop
     gameLoop();
 
-    // ===== HIT FREQUENCY SIMULATION =====
-    // Hidden diagnostic tool for validating game math.
+    // ===== HIT FREQUENCY SIMULATION (delegated to math engine) =====
     // Run from browser console: runSimulation(100000)
-    // Tests all 3 RTP settings and reports hit frequency, RTP, and bonus rate.
-    // Target: 32% hit frequency (one in three spins wins something)
-
-    function runSimulation(numSpins) {
-        numSpins = numSpins || 100000;
-        const results = {};
-
-        [86, 88, 92, 96].forEach(function(rtp) {
-            const strips = rtp === 86 ? STRIPS_86 : rtp === 88 ? STRIPS_88 : rtp === 96 ? STRIPS_96 : STRIPS_92;
-            const stripLen = strips[0].length;
-            let totalWagered = 0;
-            let totalPaid = 0;
-            let winSpins = 0;
-            let bonusTriggers = 0;
-
-            for (let spin = 0; spin < numSpins; spin++) {
-                totalWagered += 10; // 10 lines x 1 credit per line
-
-                // Generate random reel positions
-                const positions = [];
-                for (let r = 0; r < 5; r++) {
-                    positions.push(Math.floor(Math.random() * stripLen));
-                }
-
-                // Build the 5x3 grid from the strips
-                const grid = [];
-                for (let r = 0; r < 5; r++) {
-                    grid[r] = [];
-                    for (let row = 0; row < 3; row++) {
-                        grid[r][row] = strips[r][(positions[r] + row) % stripLen];
-                    }
-                }
-
-                // Count fireballs for bonus trigger check
-                let fireballs = 0;
-                for (let r = 0; r < 5; r++) {
-                    for (let row = 0; row < 3; row++) {
-                        if (SYMBOLS[grid[r][row]].name === 'FIREBALL') fireballs++;
-                    }
-                }
-                if (fireballs >= 3) bonusTriggers++;
-
-                // Check all 10 paylines
-                let spinWin = 0;
-                for (let p = 0; p < PAYLINES.length; p++) {
-                    const line = PAYLINES[p];
-                    const lineSyms = [];
-                    for (let r = 0; r < 5; r++) {
-                        lineSyms.push(grid[r][line[r]]);
-                    }
-
-                    const first = lineSyms[0];
-                    if (SYMBOLS[first].name === 'FIREBALL' || SYMBOLS[first].name === 'BLANK') continue;
-
-                    let mc = 1;
-                    for (let r = 1; r < 5; r++) {
-                        const sym = lineSyms[r];
-                        if (SYMBOLS[sym].name === 'FIREBALL' || SYMBOLS[sym].name === 'BLANK') break;
-                        const isW = SYMBOLS[sym].name === 'WILD';
-                        const firstW = SYMBOLS[first].name === 'WILD';
-                        const sevenInv = SYMBOLS[first].name === 'SEVEN' || SYMBOLS[sym].name === 'SEVEN';
-                        if (sym === first || (isW && !sevenInv) || (firstW && !sevenInv)) {
-                            mc++;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    if (mc >= 3) {
-                        let paySym = SYMBOLS[first].name;
-                        if (paySym === 'WILD') {
-                            for (let r = 1; r < mc; r++) {
-                                const sn = SYMBOLS[lineSyms[r]].name;
-                                if (sn !== 'WILD') { paySym = sn; break; }
-                            }
-                        }
-                        const pe = PAYTABLE[paySym];
-                        if (pe) spinWin += pe[mc - 3] * 1; // betPerLine = 1
-                    }
-                }
-
-                if (spinWin > 0) winSpins++;
-                totalPaid += spinWin;
-            }
-
-            const hitFreq = (winSpins / numSpins * 100).toFixed(2);
-            const actualRTP = (totalPaid / totalWagered * 100).toFixed(2);
-            const bonusRate = numSpins / Math.max(bonusTriggers, 1);
-
-            results[rtp + '%'] = {
-                spins: numSpins,
-                hitFrequency: hitFreq + '%',
-                actualRTP: actualRTP + '%',
-                targetRTP: rtp + '%',
-                bonusTriggers: bonusTriggers,
-                avgSpinsBetweenBonus: Math.round(bonusRate),
-                winSpins: winSpins,
-                totalWagered: totalWagered,
-                totalPaid: totalPaid
-            };
-        });
-
-        console.log('========================================');
-        console.log('  BLACK ICE GAME MATH SIMULATION');
-        console.log('  Spins per RTP setting: ' + numSpins.toLocaleString());
-        console.log('========================================');
-        for (const key in results) {
-            const r = results[key];
-            const pass = Math.abs(parseFloat(r.actualRTP) - parseFloat(r.targetRTP)) < 2;
-            console.log('');
-            console.log('  ' + key + ' Target:');
-            console.log('    Actual RTP:    ' + r.actualRTP + (pass ? ' ✓' : ' ✗ OUT OF RANGE'));
-            console.log('    Hit Frequency: ' + r.hitFrequency);
-            console.log('    Bonus Rate:    1 per ' + r.avgSpinsBetweenBonus + ' spins');
-            console.log('    Win Spins:     ' + r.winSpins.toLocaleString() + ' / ' + r.spins.toLocaleString());
-            console.log('    Total Wagered: ' + r.totalWagered.toLocaleString());
-            console.log('    Total Paid:    ' + r.totalPaid.toLocaleString());
-        }
-        console.log('');
-        console.log('========================================');
-        console.log('  GLI Target: RTP within ±2% of setting');
-        console.log('  Hit Freq Target: 28-36% (medium volatility)');
-        console.log('========================================');
-        console.table(results);
-        return results;
-    }
-
-    // Make simulation accessible from console
-    window.runSimulation = runSimulation;
+    window.runSimulation = function(numSpins) { return BM.simulate(numSpins); };
 
     // ===== GLI CERTIFICATION COMPLIANCE =====
     // Features required by Gaming Laboratories International for game certification.
@@ -3502,44 +3128,9 @@
     }
     window.getTiltLog = function() { return tiltLog; };
 
-    // --- RNG INFORMATION ---
-    // GLI requires disclosure of the RNG method.
-    // We use JavaScript's built-in Math.random() (PRNG).
-    // For certification, this would need to be replaced with a
-    // hardware RNG or cryptographic PRNG, but Math.random() is
-    // sufficient for COAM skill games in Georgia.
-    window.getRNGInfo = function() {
-        return {
-            method: 'JavaScript Math.random() (V8 xorshift128+)',
-            type: 'PRNG (Pseudo-Random Number Generator)',
-            seedSource: 'V8 engine internal state',
-            certification: 'Suitable for COAM skill games (Georgia)',
-            note: 'For GLI-11 Class III compliance, replace with hardware RNG or CSPRNG'
-        };
-    };
-
-    // --- GAME IDENTIFICATION ---
-    // Required information for certification submissions
-    window.getGameInfo = function() {
-        return {
-            title: 'Black Ice Gaming - Game 1',
-            version: '1.0.0',
-            developer: 'Black Ice Gaming',
-            platform: 'HTML5 Canvas (Chrome 90+ / Windows 10 IoT)',
-            hardware: 'JAMMA 36-pin cabinet, Intel i5, 1920x1080',
-            rtpSettings: ['86%', '88%', '92%', '96%'],
-            paylines: 10,
-            maxBet: 200,
-            minBet: 10,
-            symbolCount: 10,
-            reelStrips: '48 stops per reel, 4 strip sets',
-            skillFeatures: ['Nudge (shift 1 reel position)', 'Symbol Switch (swap adjacent symbols)'],
-            bonusFeature: 'Hold and Spin (Fire Link style)',
-            jackpotLevels: ['Mini ($50)', 'Minor ($200)', 'Major ($1,000)', 'Mega ($10,000)'],
-            progressiveType: 'Local area progressive (WebSocket relay)',
-            compliance: ['GLI-11 (EGM)', 'GLI-21 (Skill Games)', 'Georgia COAM']
-        };
-    };
+    // --- RNG & GAME INFORMATION (delegated to math engine) ---
+    window.getRNGInfo = function() { return BM.info(); };
+    window.getGameInfo = function() { return BM.info(); };
 
     // ===== PROGRESSIVE JACKPOT NETWORK =====
     // Links jackpot pools across multiple cabinets on the same local network.
@@ -3590,12 +3181,8 @@
 
                 // Server is broadcasting updated pool totals
                 if (msg.type === 'pools') {
-                    // Sync our local pools with the network values
-                    for (const name in msg.pools) {
-                        if (jackpotPools[name]) {
-                            jackpotPools[name].current = msg.pools[name];
-                        }
-                    }
+                    // Sync math engine pools with the network values
+                    BM.jackpots.setPools(msg.pools);
                 }
 
                 // Another machine on the network won a jackpot - show celebration
@@ -3629,11 +3216,11 @@
     function sendProgressiveFeed() {
         if (!progressiveConnected || !progressiveSocket) return;
 
-        // Calculate the feed amounts for this spin
+        // Send the feed amounts for this spin using math engine tier data
         const feeds = {};
-        for (const name in jackpotPools) {
-            const pool = jackpotPools[name];
-            feeds[name] = totalBet * pool.feed * (0.8 + Math.random() * 0.4);
+        var tiers = BM.jackpots.TIERS;
+        for (var i = 0; i < tiers.length; i++) {
+            feeds[tiers[i].name] = totalBet * tiers[i].feed * (0.8 + BM.rng.random() * 0.4);
         }
 
         progressiveSocket.send(JSON.stringify({
