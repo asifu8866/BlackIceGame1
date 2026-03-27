@@ -219,20 +219,210 @@
         }
     });
 
-    // ===== SYMBOL DEFINITIONS =====
-    // Each symbol has a name, display label, and colors from the design doc
-    const SYMBOLS = [
-        { name: 'CHERRY',     label: 'CHERRY',  color: '#FF2D2D', bgColor: '#4A0000' },
-        { name: 'BAR',        label: 'BAR',     color: '#4488FF', bgColor: '#001A4A' },
-        { name: 'DOUBLE_BAR', label: '2xBAR',   color: '#2255CC', bgColor: '#001040' },
-        { name: 'TRIPLE_BAR', label: '3xBAR',   color: '#1A3399', bgColor: '#000A30' },
-        { name: 'SEVEN',      label: '7',       color: '#FFD700', bgColor: '#4A3D00' },
-        { name: 'BELL',       label: 'BELL',    color: '#FFDD44', bgColor: '#4A4000' },
-        { name: 'DIAMOND',    label: 'DIAM',    color: '#00EEFF', bgColor: '#003A40' },
-        { name: 'WILD',       label: 'WILD',    color: '#CC44FF', bgColor: '#300050' },
-        { name: 'FIREBALL',   label: 'FIRE',    color: '#FF6600', bgColor: '#4A2000' },
-        { name: 'BLANK',      label: '',        color: '#333333', bgColor: '#111111' }
-    ];
+    // ===== THEME SYSTEM =====
+    // Each theme defines its own symbol set, colors, and game title.
+    // The math engine (paylines, RTP, paytable structure) is shared across all themes.
+    // Symbol index positions must remain consistent:
+    // 0=low1, 1=low2, 2=mid1, 3=mid2, 4=jackpot, 5=mid3, 6=high, 7=wild, 8=bonus, 9=blank
+
+    const THEMES = {
+        classic: {
+            name: 'BLACK ICE',
+            subtitle: 'CLASSIC SLOTS',
+            accentColor: '#FFD700',
+            frameGlow: '#4400AA',
+            frameBorder: '#6622CC',
+            symbols: [
+                { name: 'CHERRY',     label: 'CHERRY',  color: '#FF2D2D', bgColor: '#4A0000', shape: 'cherry' },
+                { name: 'BAR',        label: 'BAR',     color: '#4488FF', bgColor: '#001A4A', shape: 'bar' },
+                { name: 'DOUBLE_BAR', label: '2xBAR',   color: '#2255CC', bgColor: '#001040', shape: 'bar2' },
+                { name: 'TRIPLE_BAR', label: '3xBAR',   color: '#1A3399', bgColor: '#000A30', shape: 'bar3' },
+                { name: 'SEVEN',      label: '7',       color: '#FFD700', bgColor: '#4A3D00', shape: 'seven' },
+                { name: 'BELL',       label: 'BELL',    color: '#FFDD44', bgColor: '#4A4000', shape: 'bell' },
+                { name: 'DIAMOND',    label: 'DIAM',    color: '#00EEFF', bgColor: '#003A40', shape: 'diamond' },
+                { name: 'WILD',       label: 'WILD',    color: '#CC44FF', bgColor: '#300050', shape: 'star' },
+                { name: 'FIREBALL',   label: 'FIRE',    color: '#FF6600', bgColor: '#4A2000', shape: 'fire' },
+                { name: 'BLANK',      label: '',        color: '#333333', bgColor: '#111111', shape: 'none' }
+            ]
+        },
+        dragon: {
+            name: 'DRAGON FORTUNE',
+            subtitle: 'EASTERN RICHES',
+            accentColor: '#FF4444',
+            frameGlow: '#880000',
+            frameBorder: '#CC2222',
+            symbols: [
+                { name: 'CHERRY',     label: 'COIN',    color: '#FFD700', bgColor: '#4A3D00', shape: 'circle' },
+                { name: 'BAR',        label: 'FAN',     color: '#FF6666', bgColor: '#4A0020', shape: 'fan' },
+                { name: 'DOUBLE_BAR', label: 'SCROLL',  color: '#FFaa44', bgColor: '#402800', shape: 'scroll' },
+                { name: 'TRIPLE_BAR', label: 'TEMPLE',  color: '#FF3333', bgColor: '#400000', shape: 'temple' },
+                { name: 'SEVEN',      label: 'DRAGON',  color: '#FF0000', bgColor: '#4A0000', shape: 'dragon' },
+                { name: 'BELL',       label: 'LANTERN', color: '#FF8800', bgColor: '#402200', shape: 'lantern' },
+                { name: 'DIAMOND',    label: 'JADE',    color: '#44FF88', bgColor: '#004020', shape: 'jade' },
+                { name: 'WILD',       label: 'YIN YANG',color: '#FFFFFF', bgColor: '#222222', shape: 'yinyang' },
+                { name: 'FIREBALL',   label: 'PHOENIX', color: '#FF4400', bgColor: '#4A1500', shape: 'phoenix' },
+                { name: 'BLANK',      label: '',        color: '#333333', bgColor: '#1A0000', shape: 'none' }
+            ]
+        },
+        ocean: {
+            name: 'OCEAN TREASURE',
+            subtitle: 'DEEP SEA RICHES',
+            accentColor: '#00CCFF',
+            frameGlow: '#003366',
+            frameBorder: '#0066AA',
+            symbols: [
+                { name: 'CHERRY',     label: 'SHELL',   color: '#FFaaCC', bgColor: '#402030', shape: 'shell' },
+                { name: 'BAR',        label: 'FISH',    color: '#44CCFF', bgColor: '#002040', shape: 'fish' },
+                { name: 'DOUBLE_BAR', label: 'CORAL',   color: '#FF6688', bgColor: '#401020', shape: 'coral' },
+                { name: 'TRIPLE_BAR', label: 'ANCHOR',  color: '#8888AA', bgColor: '#202030', shape: 'anchor' },
+                { name: 'SEVEN',      label: 'TRIDENT', color: '#FFD700', bgColor: '#4A3D00', shape: 'trident' },
+                { name: 'BELL',       label: 'PEARL',   color: '#FFFFFF', bgColor: '#303040', shape: 'pearl' },
+                { name: 'DIAMOND',    label: 'CHEST',   color: '#FFaa00', bgColor: '#403000', shape: 'chest' },
+                { name: 'WILD',       label: 'OCTOPUS', color: '#AA44FF', bgColor: '#200040', shape: 'octopus' },
+                { name: 'FIREBALL',   label: 'BUBBLE',  color: '#44DDFF', bgColor: '#003040', shape: 'bubble' },
+                { name: 'BLANK',      label: '',        color: '#1a2a3a', bgColor: '#0a1520', shape: 'none' }
+            ]
+        }
+    };
+
+    // Current active theme
+    let currentTheme = 'classic';
+    let gameScreen = 'menu'; // 'menu' = theme select, 'game' = playing
+
+    // Get the active theme object
+    function getTheme() {
+        return THEMES[currentTheme];
+    }
+
+    // SYMBOLS array points to the active theme's symbols (updated when theme changes)
+    let SYMBOLS = THEMES.classic.symbols;
+
+    // Switch to a new theme
+    function setTheme(themeName) {
+        if (!THEMES[themeName]) return;
+        currentTheme = themeName;
+        SYMBOLS = THEMES[themeName].symbols;
+        gameScreen = 'game';
+    }
+
+    // ===== THEME SELECTION MENU =====
+    // Shown at startup - player picks which game theme to play
+
+    let menuThemeIndex = 0;
+    const THEME_KEYS = Object.keys(THEMES);
+
+    function drawThemeMenu() {
+        // Dark background
+        ctx.fillStyle = '#050510';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Title
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 72px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 30;
+        ctx.fillText('BLACK ICE GAMING', canvas.width / 2, 120);
+        ctx.shadowBlur = 0;
+
+        // Subtitle
+        ctx.fillStyle = '#8888AA';
+        ctx.font = '28px Arial, sans-serif';
+        ctx.fillText('SELECT YOUR GAME', canvas.width / 2, 180);
+
+        // Draw theme cards
+        const cardW = 420;
+        const cardH = 550;
+        const gap = 50;
+        const totalW = THEME_KEYS.length * cardW + (THEME_KEYS.length - 1) * gap;
+        const startX = (canvas.width - totalW) / 2;
+
+        for (let i = 0; i < THEME_KEYS.length; i++) {
+            const theme = THEMES[THEME_KEYS[i]];
+            const x = startX + i * (cardW + gap);
+            const y = 240;
+            const isSelected = (i === menuThemeIndex);
+
+            // Card background
+            if (isSelected) {
+                ctx.shadowColor = theme.accentColor;
+                ctx.shadowBlur = 25;
+            }
+            ctx.fillStyle = isSelected ? '#1a1a3a' : '#0e0e1e';
+            roundRect(x, y, cardW, cardH, 16, true);
+            ctx.shadowBlur = 0;
+
+            // Card border
+            ctx.strokeStyle = isSelected ? theme.accentColor : '#333355';
+            ctx.lineWidth = isSelected ? 3 : 1;
+            roundRect(x, y, cardW, cardH, 16, false, true);
+
+            // Theme name
+            ctx.fillStyle = isSelected ? theme.accentColor : '#666688';
+            ctx.font = 'bold 36px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(theme.name, x + cardW / 2, y + 50);
+
+            // Subtitle
+            ctx.fillStyle = isSelected ? '#AAAACC' : '#444466';
+            ctx.font = '20px Arial, sans-serif';
+            ctx.fillText(theme.subtitle, x + cardW / 2, y + 85);
+
+            // Preview: draw 3 sample symbols
+            const symPreview = [0, 4, 7]; // low, jackpot, wild
+            for (let s = 0; s < 3; s++) {
+                const sym = theme.symbols[symPreview[s]];
+                const sx = x + 40 + s * 120;
+                const sy = y + 120;
+                const sw = 100;
+                const sh = 100;
+
+                // Symbol tile
+                ctx.fillStyle = sym.bgColor;
+                roundRect(sx, sy, sw, sh, 8, true);
+                ctx.strokeStyle = sym.color + '66';
+                ctx.lineWidth = 1;
+                roundRect(sx, sy, sw, sh, 8, false, true);
+
+                // Symbol label
+                ctx.fillStyle = sym.color;
+                ctx.font = 'bold 16px Arial, sans-serif';
+                ctx.fillText(sym.label, sx + sw / 2, sy + sh / 2 + 20);
+            }
+
+            // Game number
+            ctx.fillStyle = isSelected ? '#FFFFFF' : '#555577';
+            ctx.font = 'bold 48px Arial, sans-serif';
+            ctx.fillText('GAME ' + (i + 1), x + cardW / 2, y + 320);
+
+            // "PRESS SPIN TO PLAY" on selected
+            if (isSelected) {
+                const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
+                ctx.globalAlpha = pulse;
+                ctx.fillStyle = theme.accentColor;
+                ctx.font = 'bold 24px Arial, sans-serif';
+                ctx.fillText('PRESS SPIN TO PLAY', x + cardW / 2, y + cardH - 40);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // Navigation hint
+        ctx.fillStyle = '#555566';
+        ctx.font = '22px Arial, sans-serif';
+        ctx.fillText('\u25C0 LEFT / RIGHT \u25B6 to browse  |  SPIN to select', canvas.width / 2, canvas.height - 50);
+    }
+
+    // Handle input on the theme selection menu
+    function handleThemeMenuInput(action) {
+        if (action === 'LEFT') {
+            menuThemeIndex = (menuThemeIndex - 1 + THEME_KEYS.length) % THEME_KEYS.length;
+        } else if (action === 'RIGHT') {
+            menuThemeIndex = (menuThemeIndex + 1) % THEME_KEYS.length;
+        } else if (action === 'SPIN') {
+            setTheme(THEME_KEYS[menuThemeIndex]);
+        }
+    }
 
     // ===== REEL LAYOUT =====
     // 5 reels, 3 visible rows each - this is what the player sees
@@ -539,7 +729,7 @@
         ctx.textBaseline = 'middle';
         ctx.shadowColor = '#FFD700';
         ctx.shadowBlur = 20;
-        ctx.fillText('BLACK ICE', MACHINE_X + MACHINE_W / 2, MACHINE_Y + 90);
+        ctx.fillText(getTheme().name, MACHINE_X + MACHINE_W / 2, MACHINE_Y + 90);
         ctx.shadowBlur = 0;
 
         // Reel window border - glowing frame around the reels
@@ -551,9 +741,9 @@
         const borderH = REEL_H + borderPad * 2;
 
         // Outer glow
-        ctx.shadowColor = '#4400AA';
+        ctx.shadowColor = getTheme().frameGlow;
         ctx.shadowBlur = 30;
-        ctx.strokeStyle = '#6622CC';
+        ctx.strokeStyle = getTheme().frameBorder;
         ctx.lineWidth = 4;
         roundRect(borderX, borderY, borderW, borderH, 10, false, true);
         ctx.shadowBlur = 0;
@@ -2230,6 +2420,23 @@
         const clickX = (e.clientX - rect.left) * scaleX;
         const clickY = (e.clientY - rect.top) * scaleY;
 
+        // If on theme menu, handle card clicks
+        if (gameScreen === 'menu') {
+            const cardW = 420;
+            const gap = 50;
+            const totalW = THEME_KEYS.length * cardW + (THEME_KEYS.length - 1) * gap;
+            const startX = (canvas.width - totalW) / 2;
+            for (let i = 0; i < THEME_KEYS.length; i++) {
+                const cx = startX + i * (cardW + gap);
+                if (clickX >= cx && clickX <= cx + cardW && clickY >= 240 && clickY <= 790) {
+                    menuThemeIndex = i;
+                    setTheme(THEME_KEYS[i]);
+                    return;
+                }
+            }
+            return;
+        }
+
         // Check if click is inside the spin button
         if (clickX >= SPIN_BTN_X && clickX <= SPIN_BTN_X + SPIN_BTN_W &&
             clickY >= SPIN_BTN_Y && clickY <= SPIN_BTN_Y + SPIN_BTN_H) {
@@ -2381,6 +2588,12 @@
         const action = JAMMA_MAP[e.code];
         if (!action) return;
         e.preventDefault();
+
+        // If on theme selection menu, route inputs there
+        if (gameScreen === 'menu') {
+            handleThemeMenuInput(action);
+            return;
+        }
 
         // If operator menu is open, route inputs there instead
         if (operatorMenuOpen && action !== 'SERVICE') {
@@ -2675,6 +2888,14 @@
     // This runs 60 times per second using requestAnimationFrame (rAF)
     // It redraws everything every frame for smooth animation
     function gameLoop() {
+        // If on theme selection screen, draw that instead of the game
+        if (gameScreen === 'menu') {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawThemeMenu();
+            requestAnimationFrame(gameLoop);
+            return;
+        }
+
         // Update cashout overlay timer
         if (cashoutActive) {
             cashoutTimer--;

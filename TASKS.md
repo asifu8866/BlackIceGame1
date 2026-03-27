@@ -30,8 +30,8 @@
 
 - [x] Map JAMMA 36-pin button inputs to keyboard events
 - [x] Set up fullscreen kiosk mode (no browser toolbar)
-- [ ] Integrate bill acceptor communication
-- [ ] Integrate TITO ticket printer
+- [x] Integrate bill acceptor communication
+- [x] Integrate TITO ticket printer
 - [x] Build operator settings menu (RTP select, volume, diagnostics)
 - [ ] Test on Intel i5 / Windows 10 IoT target hardware
 
