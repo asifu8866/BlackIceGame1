@@ -235,10 +235,12 @@
         initAudio();
         playSpinStartSound();
 
-        // Clear any win display from the previous spin
+        // Clear any win display and nudge state from the previous spin
         activeWins = [];
         showingWins = false;
         winDisplayIndex = -1;
+        nudgeAvailable = false;
+        nudgeUsed = false;
 
         // Randomize new target positions for each reel (where it will land)
         for (let r = 0; r < NUM_REELS; r++) {
@@ -540,7 +542,7 @@
 
             // Draw one extra symbol above and below for smooth scrolling
             for (let row = -1; row <= NUM_ROWS; row++) {
-                const symY = baseY + row * SYMBOL_H - reel.offset + reel.bounceBack;
+                const symY = baseY + row * SYMBOL_H - reel.offset + reel.bounceBack + getNudgeOffset(r);
                 // Only draw if the symbol would be at least partially visible
                 if (symY + SYMBOL_H > REEL_AREA_Y - SYMBOL_H && symY < REEL_AREA_Y + REEL_H + SYMBOL_H) {
                     const symbolIdx = getStripSymbol(r, reel.position + row);
@@ -1226,6 +1228,165 @@
         osc.stop(now + 0.5);
     }
 
+    // ===== NUDGE SKILL FEATURE =====
+    // After reels stop, the player can shift ONE reel up or down by one position.
+    // This is the skill element that qualifies the game as a COAM skill game
+    // under Georgia gaming regulations. The player must actively choose which
+    // reel to nudge and which direction - a genuine decision that affects outcome.
+    //
+    // Rules:
+    // - One nudge allowed per spin (use it or lose it)
+    // - Available for a few seconds after reels stop (before next spin)
+    // - Nudge UP = symbols shift down (reveals symbol above top row)
+    // - Nudge DOWN = symbols shift up (reveals symbol below bottom row)
+    // - After nudge, wins are re-checked with the new grid
+    // - Not available during Hold and Spin bonus
+
+    let nudgeAvailable = false;      // true when player can nudge after a spin
+    let nudgeUsed = false;           // true after player uses their nudge this spin
+    let nudgeAnimating = false;      // true during nudge slide animation
+    let nudgeReel = -1;              // which reel is being nudged (-1 = none)
+    let nudgeDirection = 0;          // +1 = up (reveal above), -1 = down (reveal below)
+    let nudgeProgress = 0;           // 0 to 1 animation progress
+
+    const NUDGE_ANIM_SPEED = 0.08;  // how fast the nudge slides (per frame)
+
+    // Arrow button dimensions for nudge UI
+    const NUDGE_ARROW_W = 60;
+    const NUDGE_ARROW_H = 30;
+
+    // Enable nudge after a normal spin completes
+    function enableNudge() {
+        if (gameMode !== 'NORMAL') return;
+        nudgeAvailable = true;
+        nudgeUsed = false;
+    }
+
+    // Player chose to nudge a reel in a direction
+    function performNudge(reelIndex, direction) {
+        if (!nudgeAvailable || nudgeUsed || nudgeAnimating) return;
+        if (gameMode !== 'NORMAL') return;
+        if (isSpinning) return;
+
+        nudgeUsed = true;
+        nudgeAnimating = true;
+        nudgeReel = reelIndex;
+        nudgeDirection = direction;
+        nudgeProgress = 0;
+
+        // Clear any current win display (we'll re-check after nudge)
+        activeWins = [];
+        showingWins = false;
+        winDisplayIndex = -1;
+        lastWin = 0;
+
+        playNudgeSound();
+    }
+
+    // Update the nudge slide animation each frame
+    function updateNudge() {
+        if (!nudgeAnimating) return;
+
+        nudgeProgress += NUDGE_ANIM_SPEED;
+
+        if (nudgeProgress >= 1) {
+            // Animation complete - apply the actual position change
+            nudgeProgress = 0;
+            nudgeAnimating = false;
+
+            const reel = reels[nudgeReel];
+            // Move the reel position on the strip
+            // nudgeDirection +1 = up (subtract position to show earlier symbols)
+            // nudgeDirection -1 = down (add position to show later symbols)
+            reel.position = ((reel.position - nudgeDirection) % REEL_STRIP_LENGTH + REEL_STRIP_LENGTH) % REEL_STRIP_LENGTH;
+
+            // Reset the visual offset
+            reel.bounceBack = 0;
+
+            // Rebuild the grid and check for wins with the new arrangement
+            updateReelGrid();
+            checkWins();
+
+            // Disable nudge after use
+            nudgeAvailable = false;
+            nudgeReel = -1;
+        }
+    }
+
+    // Draw the nudge arrow buttons above and below each reel
+    function drawNudgeUI() {
+        // Only show when nudge is available and not used yet
+        if (!nudgeAvailable || nudgeUsed || gameMode !== 'NORMAL' || isSpinning) return;
+
+        const baseY = REEL_AREA_Y + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+        const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 300);
+
+        for (let r = 0; r < NUM_REELS; r++) {
+            const reelX = REEL_AREA_X + r * (REEL_W + REEL_GAP);
+            const reelCX = reelX + REEL_W / 2;
+
+            // UP arrow (above the reel)
+            const upY = baseY - 38;
+            ctx.save();
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = '#22CC88';
+            ctx.beginPath();
+            ctx.moveTo(reelCX - 20, upY + 24);
+            ctx.lineTo(reelCX, upY + 4);
+            ctx.lineTo(reelCX + 20, upY + 24);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            // DOWN arrow (below the reel)
+            const downY = baseY + NUM_ROWS * SYMBOL_H + 8;
+            ctx.save();
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = '#22CC88';
+            ctx.beginPath();
+            ctx.moveTo(reelCX - 20, downY + 4);
+            ctx.lineTo(reelCX, downY + 24);
+            ctx.lineTo(reelCX + 20, downY + 4);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // "NUDGE" label
+        ctx.save();
+        ctx.fillStyle = '#22CC88';
+        ctx.font = 'bold 20px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.globalAlpha = pulse;
+        ctx.fillText('TAP \u25B2 OR \u25BC TO NUDGE', MACHINE_X + MACHINE_W / 2, baseY - 42);
+        ctx.restore();
+    }
+
+    // Apply visual offset to the nudging reel during animation
+    function getNudgeOffset(reelIndex) {
+        if (!nudgeAnimating || reelIndex !== nudgeReel) return 0;
+        // Smooth ease-out animation
+        const eased = 1 - Math.pow(1 - nudgeProgress, 2);
+        return nudgeDirection * eased * SYMBOL_H;
+    }
+
+    // Nudge click sound - short mechanical click
+    function playNudgeSound() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'square';
+        osc.frequency.value = 200;
+        const now = audioCtx.currentTime;
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.start(now);
+        osc.stop(now + 0.08);
+    }
+
     // ===== SOUND EFFECTS =====
     // Generated with Web Audio API - no audio files needed, works 100% offline
     // AudioContext is created on first user interaction (browser requirement)
@@ -1633,6 +1794,32 @@
         if (clickX >= SPIN_BTN_X && clickX <= SPIN_BTN_X + SPIN_BTN_W &&
             clickY >= SPIN_BTN_Y && clickY <= SPIN_BTN_Y + SPIN_BTN_H) {
             startSpin();
+            return;
+        }
+
+        // Check if click is on a nudge arrow (only when nudge is available)
+        if (nudgeAvailable && !nudgeUsed && !nudgeAnimating && gameMode === 'NORMAL' && !isSpinning) {
+            const baseY = REEL_AREA_Y + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
+            for (let r = 0; r < NUM_REELS; r++) {
+                const reelX = REEL_AREA_X + r * (REEL_W + REEL_GAP);
+                const reelCX = reelX + REEL_W / 2;
+
+                // UP arrow hit zone
+                const upY = baseY - 38;
+                if (clickX >= reelCX - 30 && clickX <= reelCX + 30 &&
+                    clickY >= upY && clickY <= upY + 30) {
+                    performNudge(r, 1); // nudge up
+                    return;
+                }
+
+                // DOWN arrow hit zone
+                const downY = baseY + NUM_ROWS * SYMBOL_H + 8;
+                if (clickX >= reelCX - 30 && clickX <= reelCX + 30 &&
+                    clickY >= downY && clickY <= downY + 30) {
+                    performNudge(r, -1); // nudge down
+                    return;
+                }
+            }
         }
     });
 
@@ -1718,6 +1905,7 @@
             updateReelGrid();
             checkWins(); // look for winning paylines
             checkBonusTrigger(); // check if Hold and Spin bonus should trigger
+            enableNudge(); // allow player to nudge one reel
         }
     }
 
@@ -1727,6 +1915,8 @@
     function gameLoop() {
         // Update reel positions if spinning
         updateReels();
+        // Update nudge slide animation
+        updateNudge();
         // Update which win line is being highlighted
         updateWinDisplay();
         // Update Hold and Spin bonus state machine
@@ -1743,6 +1933,7 @@
         drawWinLines();       // glowing lines over winning paylines
         drawBonusOverlay();   // Hold and Spin overlay (draws on top of reels when active)
         if (gameMode !== 'HOLD_AND_SPIN') drawPaylineMarkers(); // hide markers during bonus
+        drawNudgeUI();        // nudge arrow buttons (when available)
         drawBottomPanel();
         drawSpinButton();
 
