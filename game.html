@@ -285,32 +285,43 @@
     });
 
     // ===== THEME SYSTEM =====
-    // Each theme defines its own symbol set, colors, and game title.
-    // The math engine (paylines, RTP, paytable structure) is shared across all themes.
-    // Symbol index positions must remain consistent:
-    // 0=low1, 1=low2, 2=mid1, 3=mid2, 4=jackpot, 5=mid3, 6=high, 7=wild, 8=bonus, 9=blank
+    // Single Day of the Dead theme with 12 symbols matching the math engine.
+    // Symbol indices 0-11: WILD, LA_CATRINA, MARIACHI_S, DANCER, GUITARIST,
+    // TEQUILA, MARIGOLD, CANDLES, GUITAR, SCATTER, FIREBALL, JACKPOT_SYM
 
-    const THEMES = {
+    // Helper: map math engine symbol name to foreground color
+    function getSymbolColor(sym) {
+        var colors = {
+            'WILD': '#FF00FF', 'LA_CATRINA': '#FF1493', 'MARIACHI_S': '#00BFFF',
+            'DANCER': '#FFD700', 'GUITARIST': '#32CD32', 'TEQUILA': '#FF8C00',
+            'MARIGOLD': '#FFA500', 'CANDLES': '#FFE4B5', 'GUITAR': '#8B4513',
+            'SCATTER': '#9400D3', 'FIREBALL': '#FF4500', 'JACKPOT_SYM': '#FFD700'
+        };
+        return colors[sym.name] || '#FFFFFF';
+    }
+
+    // Helper: map math engine symbol name to background color
+    function getSymbolBgColor(sym) {
+        var bgs = {
+            'WILD': '#4B0082', 'LA_CATRINA': '#8B0000', 'MARIACHI_S': '#00008B',
+            'DANCER': '#4B3700', 'GUITARIST': '#006400', 'TEQUILA': '#8B4500',
+            'MARIGOLD': '#8B5A00', 'CANDLES': '#4B3700', 'GUITAR': '#3E1F00',
+            'SCATTER': '#2E0854', 'FIREBALL': '#8B0000', 'JACKPOT_SYM': '#8B6900'
+        };
+        return bgs[sym.name] || '#1a1a1a';
+    }
+
+    var THEMES = {
         dayofdead: {
             name: 'DIA DE LOS MUERTOS',
             subtitle: 'DAY OF THE DEAD',
-            accentColor: '#FF6B00',  // marigold orange
+            accentColor: '#FF6B00',   // marigold orange
             frameGlow: '#FF4400',
             frameBorder: '#CC3300',
-            symbols: [
-                { name: 'WILD',       label: 'WILD',     color: '#CC44FF', bgColor: '#300050', shape: 'sugar_skull' },
-                { name: 'LA_CATRINA', label: 'CATRINA',   color: '#FF44AA', bgColor: '#400020', shape: 'catrina' },
-                { name: 'MARIACHI_S', label: 'SINGER',    color: '#FF3333', bgColor: '#400000', shape: 'mariachi' },
-                { name: 'DANCER',     label: 'DANCER',    color: '#44DDDD', bgColor: '#004040', shape: 'dancer' },
-                { name: 'GUITARIST',  label: 'GUITAR',    color: '#FF8800', bgColor: '#402200', shape: 'guitarist' },
-                { name: 'TEQUILA',    label: 'TEQUILA',   color: '#FFBB33', bgColor: '#403000', shape: 'tequila' },
-                { name: 'MARIGOLD',   label: 'FLOWER',    color: '#FFAA00', bgColor: '#402800', shape: 'marigold' },
-                { name: 'CANDLES',    label: 'CANDLES',   color: '#FFDD44', bgColor: '#403800', shape: 'candles' },
-                { name: 'GUITAR',     label: 'GUITAR',    color: '#AA7744', bgColor: '#302010', shape: 'guitar' },
-                { name: 'SCATTER',    label: 'SCATTER',   color: '#FFD700', bgColor: '#4A3D00', shape: 'ofrenda' },
-                { name: 'FIREBALL',   label: 'FIRE',      color: '#FF6600', bgColor: '#4A2000', shape: 'flame_skull' },
-                { name: 'JACKPOT_SYM',label: 'JACKPOT',   color: '#FFD700', bgColor: '#4A3800', shape: 'golden_marigold' }
-            ]
+            bgGradient: ['#1a0a2e', '#0a0a14'],
+            symbols: BM.symbols.ALL.map(function(sym) {
+                return { name: sym.name, label: sym.label, color: getSymbolColor(sym), bgColor: getSymbolBgColor(sym), shape: sym.name };
+            })
         }
     };
 
@@ -334,122 +345,112 @@
         gameScreen = 'game';
     }
 
-    // ===== THEME SELECTION MENU =====
-    // Shown at startup - player picks which game theme to play
+    // ===== THEME SPLASH SCREEN =====
+    // Single-theme splash that auto-starts after a brief display.
+    // Any button press also jumps straight to the game.
 
     let menuThemeIndex = 0;
     const THEME_KEYS = Object.keys(THEMES);
+    let splashTimer = 0;
+    const SPLASH_AUTO_START = 180; // 3 seconds at 60fps then auto-enter game
 
     function drawThemeMenu() {
-        // Dark background
-        ctx.fillStyle = '#050510';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        splashTimer++;
+        const theme = THEMES.dayofdead;
 
-        // Title
-        ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 72px Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = '#FFD700';
-        ctx.shadowBlur = 30;
-        ctx.fillText('BLACK ICE GAMING', canvas.width / 2, 120);
-        ctx.shadowBlur = 0;
-
-        // Subtitle
-        ctx.fillStyle = '#8888AA';
-        ctx.font = '28px Arial, sans-serif';
-        ctx.fillText('SELECT YOUR GAME', canvas.width / 2, 180);
-
-        // Draw theme cards
-        const cardW = 420;
-        const cardH = 550;
-        const gap = 50;
-        const totalW = THEME_KEYS.length * cardW + (THEME_KEYS.length - 1) * gap;
-        const startX = (canvas.width - totalW) / 2;
-
-        for (let i = 0; i < THEME_KEYS.length; i++) {
-            const theme = THEMES[THEME_KEYS[i]];
-            const x = startX + i * (cardW + gap);
-            const y = 240;
-            const isSelected = (i === menuThemeIndex);
-
-            // Card background
-            if (isSelected) {
-                ctx.shadowColor = theme.accentColor;
-                ctx.shadowBlur = 25;
-            }
-            ctx.fillStyle = isSelected ? '#1a1a3a' : '#0e0e1e';
-            roundRect(x, y, cardW, cardH, 16, true);
-            ctx.shadowBlur = 0;
-
-            // Card border
-            ctx.strokeStyle = isSelected ? theme.accentColor : '#333355';
-            ctx.lineWidth = isSelected ? 3 : 1;
-            roundRect(x, y, cardW, cardH, 16, false, true);
-
-            // Theme name
-            ctx.fillStyle = isSelected ? theme.accentColor : '#666688';
-            ctx.font = 'bold 36px Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(theme.name, x + cardW / 2, y + 50);
-
-            // Subtitle
-            ctx.fillStyle = isSelected ? '#AAAACC' : '#444466';
-            ctx.font = '20px Arial, sans-serif';
-            ctx.fillText(theme.subtitle, x + cardW / 2, y + 85);
-
-            // Preview: draw 3 sample symbols
-            const symPreview = [0, 4, 7]; // low, jackpot, wild
-            for (let s = 0; s < 3; s++) {
-                const sym = theme.symbols[symPreview[s]];
-                const sx = x + 40 + s * 120;
-                const sy = y + 120;
-                const sw = 100;
-                const sh = 100;
-
-                // Symbol tile
-                ctx.fillStyle = sym.bgColor;
-                roundRect(sx, sy, sw, sh, 8, true);
-                ctx.strokeStyle = sym.color + '66';
-                ctx.lineWidth = 1;
-                roundRect(sx, sy, sw, sh, 8, false, true);
-
-                // Symbol label
-                ctx.fillStyle = sym.color;
-                ctx.font = 'bold 16px Arial, sans-serif';
-                ctx.fillText(sym.label, sx + sw / 2, sy + sh / 2 + 20);
-            }
-
-            // Game number
-            ctx.fillStyle = isSelected ? '#FFFFFF' : '#555577';
-            ctx.font = 'bold 48px Arial, sans-serif';
-            ctx.fillText('GAME ' + (i + 1), x + cardW / 2, y + 320);
-
-            // "PRESS SPIN TO PLAY" on selected
-            if (isSelected) {
-                const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
-                ctx.globalAlpha = pulse;
-                ctx.fillStyle = theme.accentColor;
-                ctx.font = 'bold 24px Arial, sans-serif';
-                ctx.fillText('PRESS SPIN TO PLAY', x + cardW / 2, y + cardH - 40);
-                ctx.globalAlpha = 1;
-            }
+        // Auto-start after splash timer expires
+        if (splashTimer >= SPLASH_AUTO_START) {
+            setTheme('dayofdead');
+            return;
         }
 
-        // Navigation hint
-        ctx.fillStyle = '#555566';
-        ctx.font = '22px Arial, sans-serif';
-        ctx.fillText('\u25C0 LEFT / RIGHT \u25B6 to browse  |  SPIN to select', canvas.width / 2, canvas.height - 50);
+        // Dark gradient background using theme bgGradient
+        const bgGrad = ctx.createRadialGradient(960, 540, 100, 960, 540, 800);
+        bgGrad.addColorStop(0, theme.bgGradient[0]);
+        bgGrad.addColorStop(1, theme.bgGradient[1]);
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Pulsing border glow
+        const pulse = Math.sin(splashTimer * 0.04) * 0.3 + 0.7;
+        ctx.save();
+        ctx.globalAlpha = pulse * 0.5;
+        ctx.strokeStyle = theme.accentColor;
+        ctx.lineWidth = 4;
+        ctx.strokeRect(60, 60, 1800, 960);
+        ctx.restore();
+
+        // Company title
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 56px Arial, sans-serif';
+        setShadow('#FFD700', 25);
+        ctx.fillText('BLACK ICE GAMING', 960, 200);
+        clearShadow();
+        ctx.restore();
+
+        // Theme name — large marigold orange
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = theme.accentColor;
+        ctx.font = 'bold 80px Arial, sans-serif';
+        setShadow(theme.accentColor, 30);
+        ctx.fillText(theme.name, 960, 400);
+        clearShadow();
+        ctx.restore();
+
+        // Subtitle
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#CCCCDD';
+        ctx.font = '32px Arial, sans-serif';
+        ctx.fillText(theme.subtitle, 960, 470);
+        ctx.restore();
+
+        // Feature highlights
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#AAAACC';
+        ctx.font = '24px Arial, sans-serif';
+        const features = ['HOLD & SPIN BONUS', 'FREE SPINS with 2x WILDS', '4-LEVEL PROGRESSIVE JACKPOT'];
+        for (let i = 0; i < features.length; i++) {
+            ctx.fillText(features[i], 960, 560 + i * 40);
+        }
+        ctx.restore();
+
+        // Pulsing "PRESS ANY BUTTON" prompt
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const btnPulse = 0.4 + 0.6 * Math.sin(splashTimer * 0.06);
+        ctx.globalAlpha = btnPulse;
+        ctx.fillStyle = theme.accentColor;
+        ctx.font = 'bold 28px Arial, sans-serif';
+        ctx.fillText('PRESS ANY BUTTON TO PLAY', 960, 780);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // Loading bar showing auto-start progress
+        const barW = 400;
+        const barH = 8;
+        const barX = 960 - barW / 2;
+        const barY = 850;
+        const progress = splashTimer / SPLASH_AUTO_START;
+        ctx.fillStyle = '#222244';
+        ctx.fillRect(barX, barY, barW, barH);
+        ctx.fillStyle = theme.accentColor;
+        ctx.fillRect(barX, barY, barW * progress, barH);
     }
 
-    // Handle input on the theme selection menu
+    // Handle input on the theme splash screen — any action starts the game
     function handleThemeMenuInput(action) {
-        if (action === 'LEFT') {
-            menuThemeIndex = (menuThemeIndex - 1 + THEME_KEYS.length) % THEME_KEYS.length;
-        } else if (action === 'RIGHT') {
-            menuThemeIndex = (menuThemeIndex + 1) % THEME_KEYS.length;
-        } else if (action === 'SPIN') {
-            setTheme(THEME_KEYS[menuThemeIndex]);
+        if (action === 'SPIN' || action === 'LEFT' || action === 'RIGHT') {
+            setTheme('dayofdead');
         }
     }
 
@@ -541,19 +542,24 @@
         }
 
         if (isSpinning) return; // can't spin while already spinning
-        if (credits < totalBet) return; // not enough credits to spin
-        isSpinning = true;
 
-        // Deduct the bet from the player's balance
-        credits -= totalBet;
+        // During free spins intro/outro, block new spins
+        if (freeSpinsActive && (freeSpinsIntroTimer > 0 || freeSpinsOutroTimer > 0)) return;
+
+        // Free spins don't cost credits; normal spins do
+        if (!freeSpinsActive) {
+            if (credits < totalBet) return; // not enough credits to spin
+            credits -= totalBet;
+        }
+        isSpinning = true;
         lastWin = 0;
 
         // Track lifetime stats for operator dashboard
         totalSpinsPlayed++;
-        totalWageredLifetime += totalBet;
+        if (!freeSpinsActive) totalWageredLifetime += totalBet;
 
-        // Feed a small portion of the bet into each jackpot pool
-        feedJackpots();
+        // Feed a small portion of the bet into each jackpot pool (not during free spins)
+        if (!freeSpinsActive) feedJackpots();
 
         // Disable bill acceptor during spin (industry standard)
         disableBillAcceptor();
@@ -692,8 +698,8 @@
     }
 
     // ===== THEME PARTICLE EFFECTS =====
-    // Each theme gets unique ambient particles around the reel frame
-    // Classic: electric sparks, Dragon: flame embers, Ocean: bubbles
+    // Ambient marigold embers around the reel frame — Day of the Dead theme
+    // Warm oranges, yellows, and purples floating upward like candle flames
     let particles = [];
     const MAX_PARTICLES = 30;
 
@@ -716,8 +722,8 @@
 
         let p = { x: x, y: y, life: 1.0, speed: 0.005 + Math.random() * 0.01 };
 
-        // Day of the Dead marigold embers — warm oranges, yellows, and purples
-        const emberColors = ['#FF6B00', '#FFAA00', '#FFDD44', '#CC44FF', '#FF4400'];
+        // Day of the Dead marigold petals — orange, yellow, warm red
+        const emberColors = ['#FF6B00', '#FFD700', '#FF4500', '#FFA500', '#FF6B00'];
         p.color = emberColors[Math.floor(Math.random() * emberColors.length)];
         p.size = 2 + Math.random() * 4;
         p.vx = (Math.random() - 0.5) * 1.0;
@@ -750,13 +756,8 @@
             ctx.globalAlpha = p.life * 0.6;
             ctx.fillStyle = p.color;
 
-            if (currentTheme === 'ocean') {
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-                ctx.fill();
-            } else {
-                ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size * p.life, p.size * p.life);
-            }
+            // Ember-style square particles for Day of the Dead
+            ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size * p.life, p.size * p.life);
             i++;
         }
         ctx.restore();
@@ -803,6 +804,7 @@
         ctx.shadowBlur = 12;
 
         switch (sym.shape) {
+            case 'WILD':
             case 'sugar_skull':
                 // Ornate sugar skull — WILD symbol
                 ctx.fillStyle = sym.color;
@@ -846,6 +848,7 @@
                 }
                 break;
 
+            case 'LA_CATRINA':
             case 'catrina':
                 // Elegant La Catrina — lady with large hat brim
                 ctx.fillStyle = sym.color;
@@ -891,6 +894,7 @@
                 ctx.fill();
                 break;
 
+            case 'MARIACHI_S':
             case 'mariachi':
                 // Mariachi singer with sombrero, open mouth
                 ctx.fillStyle = sym.color;
@@ -936,6 +940,7 @@
                 ctx.fill();
                 break;
 
+            case 'DANCER':
             case 'dancer':
                 // Dancing skeleton figure with arms raised
                 ctx.fillStyle = sym.color;
@@ -980,6 +985,7 @@
                 }
                 break;
 
+            case 'GUITARIST':
             case 'guitarist':
                 // Mariachi figure playing guitar
                 ctx.fillStyle = sym.color;
@@ -1027,6 +1033,7 @@
                 ctx.stroke();
                 break;
 
+            case 'TEQUILA':
             case 'tequila':
                 // Tequila bottle shape with label
                 ctx.fillStyle = sym.color;
@@ -1055,6 +1062,7 @@
                 ctx.fillText('AGAVE', cx, cy + 7);
                 break;
 
+            case 'MARIGOLD':
             case 'marigold':
                 // 8-petal marigold flower
                 ctx.fillStyle = sym.color;
@@ -1090,6 +1098,7 @@
                 ctx.fill();
                 break;
 
+            case 'CANDLES':
             case 'candles':
                 // Three candles with flames
                 const candlePositions = [-14, 0, 14];
@@ -1117,6 +1126,7 @@
                 }
                 break;
 
+            case 'GUITAR':
             case 'guitar':
                 // Acoustic guitar outline
                 ctx.strokeStyle = sym.color;
@@ -1155,6 +1165,7 @@
                 }
                 break;
 
+            case 'SCATTER':
             case 'ofrenda':
                 // Altar table with arch and offerings — SCATTER
                 ctx.fillStyle = sym.color;
@@ -1186,14 +1197,15 @@
                 ctx.strokeStyle = '#FFD700';
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(cx + 8, cy - 6, 10, 12);
-                // SCATTER text
+                // FREE SPINS text
                 ctx.fillStyle = sym.color;
                 ctx.font = 'bold 8px Arial';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText('SCATTER', cx, cy - 16);
+                ctx.fillText('FREE SPINS', cx, cy - 16);
                 break;
 
+            case 'FIREBALL':
             case 'flame_skull':
                 // Skull with flames rising — FIREBALL symbol
                 ctx.fillStyle = sym.color;
@@ -1244,6 +1256,7 @@
                 }
                 break;
 
+            case 'JACKPOT_SYM':
             case 'golden_marigold':
                 // Glowing golden flower — JACKPOT symbol
                 // Radiating glow lines
@@ -1461,6 +1474,7 @@
             const name = jackpotOrder[i];
             const pool = jackpotPools[name];
             const jp = JACKPOT_VALUES.find(j => j.name === name);
+            if (!pool || !jp) continue;
             const bx = MACHINE_X + 40 + i * barW;
 
             // Jackpot box background
@@ -2499,6 +2513,195 @@
         }
     }
 
+    // ===== FREE SPINS BONUS =====
+    // Triggered when 3+ SCATTER (Ofrenda Altar) symbols land anywhere on the reels.
+    // During free spins, all wins containing a WILD get a 2x multiplier.
+    // Uses BM.freeSpins.resolveSpin() for math, which applies the multiplier internally.
+
+    let freeSpinsRemaining = 0;   // spins left in the current free spins round
+    let freeSpinsTotal = 0;       // total spins awarded (for display "X of Y")
+    let freeSpinsTotalWin = 0;    // cumulative winnings during free spins
+    let freeSpinsActive = false;  // true while a free spins round is in progress
+    let freeSpinsIntroTimer = 0;  // countdown for the intro "FREE SPINS!" banner
+    let freeSpinsOutroTimer = 0;  // countdown for the outro total-win banner
+
+    // Start a free spins round with the given number of spins
+    function startFreeSpins(count) {
+        freeSpinsRemaining = count;
+        freeSpinsTotal = count;
+        freeSpinsTotalWin = 0;
+        freeSpinsActive = true;
+        freeSpinsIntroTimer = 180; // 3 seconds intro banner
+        freeSpinsOutroTimer = 0;
+        // Play the bonus trigger sound to announce free spins
+        playBonusTriggerSound();
+    }
+
+    // Check if the current spin result triggers free spins (called after reels stop)
+    function checkFreeSpinsTrigger() {
+        if (freeSpinsActive) return; // can't trigger during free spins (retrigger handled below)
+        if (gameMode !== 'NORMAL') return; // not during Hold and Spin
+        var scatterCount = BM.spin.countScatters(reelGrid);
+        var spinsAwarded = BM.freeSpins.getCount(scatterCount);
+        if (spinsAwarded > 0) {
+            startFreeSpins(spinsAwarded);
+        }
+    }
+
+    // Run a single free spin — called when the reels stop during free spins mode
+    function resolveFreeSpinResult() {
+        if (!freeSpinsActive || freeSpinsRemaining <= 0) return;
+
+        // Use math engine's free spin resolver (applies 2x WILD multiplier)
+        var result = BM.freeSpins.resolveSpin(betPerLine, totalBet);
+
+        // Apply result wins to the display
+        activeWins = [];
+        lastWin = 0;
+        for (var i = 0; i < result.wins.length; i++) {
+            var ew = result.wins[i];
+            activeWins.push({
+                paylineIndex: ew.line,
+                matchCount: ew.count,
+                paySymbol: ew.symbol,
+                payout: ew.payout,
+                line: ew.line,
+                symbol: ew.symbol,
+                count: ew.count,
+                multiplied: ew.multiplied || false
+            });
+            lastWin += ew.payout;
+        }
+
+        // Award winnings
+        if (lastWin > 0) {
+            credits += lastWin;
+            freeSpinsTotalWin += lastWin;
+            totalPaidLifetime += lastWin;
+            showingWins = true;
+            winDisplayTimer = 0;
+            winDisplayIndex = -1;
+            playWinSound();
+        }
+
+        // Decrement remaining spins
+        freeSpinsRemaining--;
+
+        // Check for retrigger (3+ scatters during free spins awards more spins)
+        var retriggerCount = BM.spin.countScatters(reelGrid);
+        var retriggerSpins = BM.freeSpins.getCount(retriggerCount);
+        if (retriggerSpins > 0) {
+            freeSpinsRemaining += retriggerSpins;
+            freeSpinsTotal += retriggerSpins;
+        }
+
+        // When all free spins are done, show the total win
+        if (freeSpinsRemaining <= 0) {
+            freeSpinsOutroTimer = 240; // 4 seconds outro
+        }
+    }
+
+    // Draw the Free Spins overlay — banner at top, 2x indicator, total win
+    function drawFreeSpinsOverlay() {
+        if (!freeSpinsActive) return;
+        const theme = getTheme();
+
+        // During intro banner (before spins start)
+        if (freeSpinsIntroTimer > 0) {
+            freeSpinsIntroTimer--;
+            ctx.save();
+            // Dark overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // "FREE SPINS!" title
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const introScale = Math.min(1.0, (180 - freeSpinsIntroTimer) / 30);
+            ctx.fillStyle = theme.accentColor;
+            ctx.font = 'bold ' + Math.floor(96 * introScale) + 'px Arial, sans-serif';
+            setShadow(theme.accentColor, 40);
+            ctx.fillText('FREE SPINS!', 960, 400);
+            clearShadow();
+
+            // Number of spins
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 64px Arial, sans-serif';
+            ctx.fillText(freeSpinsTotal + ' SPINS AWARDED', 960, 520);
+
+            // 2x WILD multiplier
+            ctx.fillStyle = '#FF00FF';
+            ctx.font = 'bold 40px Arial, sans-serif';
+            setShadow('#FF00FF', 20);
+            ctx.fillText('2x WILD MULTIPLIER', 960, 620);
+            clearShadow();
+            ctx.restore();
+            return;
+        }
+
+        // During outro (showing total win)
+        if (freeSpinsOutroTimer > 0) {
+            freeSpinsOutroTimer--;
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = theme.accentColor;
+            ctx.font = 'bold 72px Arial, sans-serif';
+            setShadow(theme.accentColor, 30);
+            ctx.fillText('FREE SPINS COMPLETE!', 960, 380);
+            clearShadow();
+
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 96px Arial, sans-serif';
+            setShadow('#FFD700', 40);
+            ctx.fillText('TOTAL WIN: ' + freeSpinsTotalWin, 960, 520);
+            clearShadow();
+
+            ctx.restore();
+
+            // End free spins when outro finishes
+            if (freeSpinsOutroTimer <= 0) {
+                freeSpinsActive = false;
+            }
+            return;
+        }
+
+        // During active free spins: top banner showing remaining count
+        ctx.save();
+
+        // Banner background
+        const bannerY = MACHINE_Y + 165;
+        const bannerH = 36;
+        ctx.fillStyle = 'rgba(26, 10, 46, 0.85)';
+        ctx.fillRect(MACHINE_X + 30, bannerY, MACHINE_W - 60, bannerH);
+        ctx.strokeStyle = theme.accentColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(MACHINE_X + 30, bannerY, MACHINE_W - 60, bannerH);
+
+        // "FREE SPINS" text with count
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = theme.accentColor;
+        ctx.font = 'bold 20px Arial, sans-serif';
+        const spinsText = 'FREE SPINS: ' + (freeSpinsTotal - freeSpinsRemaining + 1) + ' of ' + freeSpinsTotal;
+        ctx.fillText(spinsText, 960 - 200, bannerY + bannerH / 2);
+
+        // "2x WILD MULTIPLIER" indicator
+        ctx.fillStyle = '#FF00FF';
+        ctx.font = 'bold 18px Arial, sans-serif';
+        ctx.fillText('2x WILD MULTIPLIER', 960 + 100, bannerY + bannerH / 2);
+
+        // Total win so far (right side)
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 18px Arial, sans-serif';
+        ctx.fillText('WIN: ' + freeSpinsTotalWin, 960 + 400, bannerY + bannerH / 2);
+
+        ctx.restore();
+    }
+
     // ===== WIN LINE DRAWING =====
     // Draw glowing lines across the reels for winning paylines
     function drawWinLines() {
@@ -2913,7 +3116,7 @@
                 const idx = rtpOptions.indexOf(currentRTP);
                 if (action === 'RIGHT') currentRTP = rtpOptions[Math.min(idx + 1, rtpOptions.length - 1)];
                 else currentRTP = rtpOptions[Math.max(idx - 1, 0)];
-                loadReelStrips();
+                // loadReelStrips() called automatically by currentRTP setter
             } else if (item.type === 'volume') {
                 if (action === 'RIGHT') masterVolume = Math.min(1.0, masterVolume + 0.1);
                 else masterVolume = Math.max(0.0, masterVolume - 0.1);
@@ -3092,7 +3295,13 @@
                 for (var gr = 0; gr < 5; gr++) { gridSnap[gr] = [reelGrid[gr][0], reelGrid[gr][1], reelGrid[gr][2]]; }
                 recordGameResult(totalBet, lastWin, gridSnap, activeWins.map(function(w) { return { line: w.line, symbol: w.symbol, count: w.count, payout: w.payout }; }));
             }
-            checkBonusTrigger(); // check if Hold and Spin bonus should trigger
+            // During free spins, use the free spin resolver instead of normal wins
+            if (freeSpinsActive && freeSpinsIntroTimer <= 0 && freeSpinsOutroTimer <= 0) {
+                resolveFreeSpinResult();
+            } else {
+                checkBonusTrigger(); // check if Hold and Spin bonus should trigger
+                checkFreeSpinsTrigger(); // check if scatters trigger free spins
+            }
             enableNudge(); // allow player to nudge one reel
             enableSwitch(); // allow player to swap two adjacent symbols
             enableBillAcceptor(); // re-enable bill acceptor after spin
@@ -3150,9 +3359,9 @@
     function resetIdleTimer() {
         idleTimer = 0;
         if (attractActive) {
-            // Exit attract mode — return to theme selection
+            // Exit attract mode — go straight to game (single theme)
             attractActive = false;
-            gameScreen = 'menu';
+            gameScreen = 'game';
         }
     }
 
@@ -3165,12 +3374,8 @@
     function drawAttractMode() {
         attractTimer++;
 
-        // Cycle themes every 5 seconds
-        if (attractTimer % 300 === 0) {
-            attractThemeIndex = (attractThemeIndex + 1) % THEME_KEYS.length;
-        }
-
-        const themeKey = THEME_KEYS[attractThemeIndex];
+        // Single theme — Day of the Dead
+        const themeKey = 'dayofdead';
         const theme = THEMES[themeKey];
 
         // Slowly scroll fake reel positions
@@ -3271,13 +3476,13 @@
 
         // Scrolling "INSERT BILL TO PLAY" text at the bottom
         attractScrollX -= 2;
-        if (attractScrollX < -1200) attractScrollX = 1920;
+        if (attractScrollX < -1800) attractScrollX = 1920;
 
         ctx.save();
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 40px Arial';
         ctx.globalAlpha = 0.8 + Math.sin(attractTimer * 0.05) * 0.2;
-        ctx.fillText('INSERT BILL TO PLAY     ★     DIA DE LOS MUERTOS     ★     PROGRESSIVE JACKPOTS     ★     HOLD & SPIN BONUS     ★     SKILL FEATURES', attractScrollX, 800);
+        ctx.fillText('INSERT BILL TO PLAY     ★     DIA DE LOS MUERTOS     ★     HOLD & SPIN BONUS     ★     FREE SPINS with 2x WILDS     ★     4-LEVEL PROGRESSIVE JACKPOT', attractScrollX, 800);
         ctx.restore();
 
         // Pulsing "PRESS ANY BUTTON" at very bottom
@@ -3292,10 +3497,13 @@
         // Feature callouts cycle
         const features = [
             'HOLD & SPIN BONUS',
+            'FREE SPINS with 2x WILDS',
+            '4-LEVEL PROGRESSIVE JACKPOT',
             'NUDGE SKILL FEATURE',
             'SYMBOL SWITCH SKILL',
-            '4-LEVEL PROGRESSIVE JACKPOTS',
-            'UP TO 96% RTP'
+            'UP TO 96% RTP',
+            'SUGAR SKULL WILDS',
+            'LA CATRINA HIGH PAYS'
         ];
         const featureIdx = Math.floor(attractTimer / 180) % features.length;
         ctx.save();
@@ -3356,6 +3564,17 @@
         // Update Hold and Spin bonus state machine
         updateBonus();
 
+        // Free Spins auto-spin: when intro banner finishes and reels are idle,
+        // automatically start the next free spin. After all spins are done,
+        // the outro timer handles ending the round.
+        if (freeSpinsActive && !isSpinning && freeSpinsIntroTimer <= 0 && freeSpinsOutroTimer <= 0 && freeSpinsRemaining > 0) {
+            // Small delay between free spins so the player can see results
+            if (!showingWins || winDisplayTimer > 60) {
+                showingWins = false;
+                startSpin();
+            }
+        }
+
         // Clear the entire canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -3367,6 +3586,7 @@
         drawLandingFlashes(); // white flash when each reel stops
         drawWinLines();       // glowing lines over winning paylines
         drawBonusOverlay();   // Hold and Spin overlay (draws on top of reels when active)
+        drawFreeSpinsOverlay(); // Free Spins banner and 2x WILD indicator
         if (gameMode !== 'HOLD_AND_SPIN') drawPaylineMarkers(); // hide markers during bonus
         drawNudgeUI();        // nudge arrow buttons (when available)
         drawSwitchUI();       // symbol switch selection UI (when available)
