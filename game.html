@@ -144,8 +144,26 @@
         [0,9,1,9,0,5,9,0,2,9,8,9,0,9,1,0,9,5,9,0,3,9,7,0,9,6,9,0,1,9,0,9,5,0,9,2,9,0,7,9,0,9,1,4,9,0,9,5]
     ];
 
+    // ----- 86% RTP STRIPS (tightest - house keeps 14%) -----
+    // Based on 88% strips (1 WILD removed from reel 3) plus 1 extra BLANK
+    // added to each reel (49 stops instead of 48). The extra blank dilutes
+    // all symbol frequencies slightly, bringing RTP down ~2% from 88%.
+    const STRIPS_86 = [
+        // Reel 1 (= 88% Reel 1, unchanged, 48 stops)
+        [0,9,1,9,0,9,5,9,2,9,0,8,9,0,9,1,9,5,0,9,3,9,0,9,7,9,0,9,1,9,6,0,9,2,9,0,9,5,0,9,7,9,0,9,4,9,0,9],
+        // Reel 2 (88% Reel 2 but CHERRY at pos 4 -> BLANK - 1 less cherry)
+        [9,0,9,1,9,9,5,9,2,0,9,9,0,8,9,1,9,0,5,9,0,3,9,7,9,0,9,6,0,9,1,9,0,9,2,9,0,9,5,0,9,7,9,0,9,1,0,9],
+        // Reel 3 (= 88% Reel 3, unchanged - already missing 1 WILD)
+        [0,9,5,9,1,0,9,2,9,0,9,8,0,9,1,9,0,5,9,3,9,0,9,9,0,9,6,9,1,0,9,0,5,9,2,0,9,7,9,0,9,1,0,9,0,9,5,9],
+        // Reel 4 (= 88% Reel 4, unchanged)
+        [9,0,1,9,5,0,9,2,9,0,9,0,8,9,1,9,0,9,5,0,9,3,9,7,0,9,0,6,9,1,9,0,9,2,0,9,5,9,0,7,9,0,9,1,9,0,4,9],
+        // Reel 5 (= 88% Reel 5, unchanged)
+        [0,9,1,9,0,5,9,0,2,9,8,9,0,9,1,0,9,5,9,0,3,9,7,0,9,6,9,0,1,9,0,9,5,0,9,2,9,0,7,9,0,9,1,4,9,0,9,5]
+    ];
+
     // Get the active reel strips based on current RTP setting
     function getActiveStrips() {
+        if (currentRTP === 86) return STRIPS_86;
         if (currentRTP === 88) return STRIPS_88;
         if (currentRTP === 96) return STRIPS_96;
         return STRIPS_92; // default
@@ -2080,13 +2098,140 @@
         }
     });
 
-    // Also allow spacebar to spin (will map to JAMMA button later)
+    // ===== JAMMA 36-PIN BUTTON MAPPING =====
+    // JAMMA arcade cabinets use a 36-pin edge connector. Physical buttons
+    // are wired through a USB encoder (I-PAC or J-PAC) which converts
+    // button presses into keyboard events. This maps those keys to game actions.
+    //
+    // Standard JAMMA button layout mapped to I-PAC defaults:
+    // Player 1 Button 1 (SPIN)      = Key "1" or Left Ctrl
+    // Player 1 Button 2 (BET UP)    = Key "2" or Left Alt
+    // Player 1 Button 3 (BET DOWN)  = Key "3" or Space
+    // Player 1 Button 4 (CASHOUT)   = Key "4" or Left Shift
+    // Player 1 Button 5 (MENU)      = Key "5" or Z
+    // Player 1 Joystick UP          = Arrow Up
+    // Player 1 Joystick DOWN        = Arrow Down
+    // Player 1 Joystick LEFT        = Arrow Left
+    // Player 1 Joystick RIGHT       = Arrow Right
+    // Coin switch                   = Key "5" (directly mapped by JAMMA standard)
+    // Service button                = Key "9" (opens operator menu)
+
+    const JAMMA_MAP = {
+        // Primary mappings (I-PAC defaults)
+        'Digit1':      'SPIN',
+        'ControlLeft':  'SPIN',
+        'Space':        'SPIN',          // also spin for keyboard testing
+        'Digit2':      'BET_UP',
+        'AltLeft':      'BET_UP',
+        'Digit3':      'BET_DOWN',
+        'Digit4':      'CASHOUT',
+        'ShiftLeft':    'CASHOUT',
+        'Digit5':      'COIN',          // coin switch
+        'KeyZ':         'MENU',
+        'Digit9':      'SERVICE',        // operator service button
+        // Joystick directions (for nudge and menu navigation)
+        'ArrowUp':      'UP',
+        'ArrowDown':    'DOWN',
+        'ArrowLeft':    'LEFT',
+        'ArrowRight':   'RIGHT',
+        // Keyboard shortcuts for desktop testing
+        'Enter':        'SPIN',
+        'Equal':        'BET_UP',        // + key
+        'Minus':        'BET_DOWN'       // - key
+    };
+
+    // Bet levels available to the player (credits per line x 10 lines)
+    const BET_LEVELS = [10, 20, 50, 100, 200];
+    let currentBetIndex = 0;
+
+    // Increase the bet to the next level
+    function betUp() {
+        if (isSpinning) return;
+        currentBetIndex = (currentBetIndex + 1) % BET_LEVELS.length;
+        totalBet = BET_LEVELS[currentBetIndex];
+        betPerLine = totalBet / 10;
+    }
+
+    // Decrease the bet to the previous level
+    function betDown() {
+        if (isSpinning) return;
+        currentBetIndex = (currentBetIndex - 1 + BET_LEVELS.length) % BET_LEVELS.length;
+        totalBet = BET_LEVELS[currentBetIndex];
+        betPerLine = totalBet / 10;
+    }
+
+    // Cashout - prints a TITO ticket (placeholder for now)
+    function cashout() {
+        if (isSpinning) return;
+        if (credits <= 0) return;
+        // In production, this sends a command to the TITO printer
+        // For now, just show a cashout message
+        cashoutActive = true;
+        cashoutAmount = credits;
+        credits = 0;
+        cashoutTimer = 180; // show for 3 seconds at 60fps
+        playCashoutSound();
+    }
+
+    let cashoutActive = false;
+    let cashoutAmount = 0;
+    let cashoutTimer = 0;
+
+    // Cashout sound - descending chime (coins paying out)
+    function playCashoutSound() {
+        if (!audioCtx) return;
+        [880, 660, 440, 330].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const t = audioCtx.currentTime + i * 0.12;
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+            osc.start(t);
+            osc.stop(t + 0.3);
+        });
+    }
+
+    // Handle all JAMMA button inputs
     document.addEventListener('keydown', function(e) {
-        if (e.code === 'Space') {
-            e.preventDefault();
-            startSpin();
+        const action = JAMMA_MAP[e.code];
+        if (!action) return;
+        e.preventDefault();
+
+        switch (action) {
+            case 'SPIN':    startSpin(); break;
+            case 'BET_UP':  betUp(); break;
+            case 'BET_DOWN': betDown(); break;
+            case 'CASHOUT': cashout(); break;
+            case 'COIN':    credits += 100; break; // coin insert adds 100 credits
+            case 'SERVICE': toggleOperatorMenu(); break;
+            // Joystick for nudge: UP/DOWN on the currently hovered reel
+            case 'UP':
+                if (nudgeAvailable && !nudgeUsed) performNudge(nudgeKeyReel, 1);
+                break;
+            case 'DOWN':
+                if (nudgeAvailable && !nudgeUsed) performNudge(nudgeKeyReel, -1);
+                break;
+            case 'LEFT':
+                nudgeKeyReel = Math.max(0, nudgeKeyReel - 1);
+                break;
+            case 'RIGHT':
+                nudgeKeyReel = Math.min(NUM_REELS - 1, nudgeKeyReel + 1);
+                break;
         }
     });
+
+    // Track which reel the joystick is pointing at for nudge
+    let nudgeKeyReel = 2; // start at middle reel
+
+    // Placeholder for operator menu (will be built fully later)
+    let operatorMenuOpen = false;
+    function toggleOperatorMenu() {
+        operatorMenuOpen = !operatorMenuOpen;
+    }
 
     // ===== REEL UPDATE LOGIC =====
     // Called every frame to move the reels during a spin
@@ -2167,10 +2312,50 @@
         }
     }
 
+    // Draw cashout overlay when player cashes out
+    function drawCashoutOverlay() {
+        if (!cashoutActive) return;
+
+        // Semi-transparent dark overlay
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(MACHINE_X + 100, MACHINE_Y + 300, MACHINE_W - 200, 300);
+
+        // Gold border
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(MACHINE_X + 100, MACHINE_Y + 300, MACHINE_W - 200, 300);
+
+        // "CASHING OUT" text
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 48px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('CASHING OUT', MACHINE_X + MACHINE_W / 2, MACHINE_Y + 400);
+
+        // Amount
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 72px Arial, sans-serif';
+        ctx.fillText(formatCredits(cashoutAmount) + ' CREDITS', MACHINE_X + MACHINE_W / 2, MACHINE_Y + 490);
+
+        // "PRINTING TICKET..." subtext
+        ctx.fillStyle = '#AAAACC';
+        ctx.font = '24px Arial, sans-serif';
+        ctx.fillText('PRINTING TITO TICKET...', MACHINE_X + MACHINE_W / 2, MACHINE_Y + 555);
+
+        ctx.restore();
+    }
+
     // ===== ANIMATION LOOP =====
     // This runs 60 times per second using requestAnimationFrame (rAF)
     // It redraws everything every frame for smooth animation
     function gameLoop() {
+        // Update cashout overlay timer
+        if (cashoutActive) {
+            cashoutTimer--;
+            if (cashoutTimer <= 0) cashoutActive = false;
+        }
+
         // Update reel positions if spinning
         updateReels();
         // Update nudge slide animation
@@ -2197,6 +2382,7 @@
         drawSwitchUI();       // symbol switch selection UI (when available)
         drawBottomPanel();
         drawSpinButton();
+        drawCashoutOverlay(); // TITO cashout message (when active)
 
         // Request the next frame
         requestAnimationFrame(gameLoop);
@@ -2215,8 +2401,8 @@
         numSpins = numSpins || 100000;
         const results = {};
 
-        [88, 92, 96].forEach(function(rtp) {
-            const strips = rtp === 88 ? STRIPS_88 : rtp === 96 ? STRIPS_96 : STRIPS_92;
+        [86, 88, 92, 96].forEach(function(rtp) {
+            const strips = rtp === 86 ? STRIPS_86 : rtp === 88 ? STRIPS_88 : rtp === 96 ? STRIPS_96 : STRIPS_92;
             const stripLen = strips[0].length;
             let totalWagered = 0;
             let totalPaid = 0;
