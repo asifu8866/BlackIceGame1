@@ -2996,6 +2996,12 @@
             updateReelGrid();
             checkWins(); // look for winning paylines
             if (typeof sasRecordSpin === 'function') sasRecordSpin(totalBet, lastWin); // SAS meter update
+            // GLI game recall - record this spin's result
+            if (typeof recordGameResult === 'function') {
+                var gridSnap = [];
+                for (var gr = 0; gr < 5; gr++) { gridSnap[gr] = [reelGrid[gr][0], reelGrid[gr][1], reelGrid[gr][2]]; }
+                recordGameResult(totalBet, lastWin, gridSnap, activeWins.map(function(w) { return { line: w.line, symbol: w.symbol, count: w.count, payout: w.payout }; }));
+            }
             checkBonusTrigger(); // check if Hold and Spin bonus should trigger
             enableNudge(); // allow player to nudge one reel
             enableSwitch(); // allow player to swap two adjacent symbols
@@ -3422,6 +3428,118 @@
 
     // Make simulation accessible from console
     window.runSimulation = runSimulation;
+
+    // ===== GLI CERTIFICATION COMPLIANCE =====
+    // Features required by Gaming Laboratories International for game certification.
+    // GLI-11 (EGM standards) and GLI-21 (skill games) apply to this product.
+
+    // --- GAME RECALL: Last 10 game results ---
+    // GLI requires the ability to display the last N game outcomes.
+    // Stored in localStorage so they survive power cycles.
+    const RECALL_KEY = 'blackice_game_recall';
+    const MAX_RECALL = 10;
+    let gameRecall = [];
+
+    // Load recall data
+    try {
+        const saved = localStorage.getItem(RECALL_KEY);
+        if (saved) gameRecall = JSON.parse(saved);
+    } catch (e) { gameRecall = []; }
+
+    // Record a game result after each spin
+    function recordGameResult(betAmount, winAmount, gridSnapshot, paylineWins) {
+        const result = {
+            timestamp: new Date().toISOString(),
+            gameNumber: sasMeters.gamesPlayed,
+            betPerLine: betPerLine,
+            totalBet: betAmount,
+            totalWin: winAmount,
+            rtpSetting: currentRTP,
+            theme: currentTheme,
+            grid: gridSnapshot, // 5x3 symbol indices
+            wins: paylineWins,  // which paylines won and how much
+            credits_before: credits - winAmount + betAmount,
+            credits_after: credits
+        };
+        gameRecall.unshift(result); // newest first
+        if (gameRecall.length > MAX_RECALL) gameRecall.pop();
+        try {
+            localStorage.setItem(RECALL_KEY, JSON.stringify(gameRecall));
+        } catch (e) {}
+    }
+
+    // Get the last N game results (for operator display or GLI audit)
+    function getGameRecall() {
+        return gameRecall;
+    }
+    window.getGameRecall = getGameRecall;
+
+    // --- ERROR / TILT LOG ---
+    // GLI requires machines to log error conditions (tilts).
+    const TILT_KEY = 'blackice_tilt_log';
+    const MAX_TILTS = 50;
+    let tiltLog = [];
+
+    try {
+        const saved = localStorage.getItem(TILT_KEY);
+        if (saved) tiltLog = JSON.parse(saved);
+    } catch (e) { tiltLog = []; }
+
+    function logTilt(code, description) {
+        const tilt = {
+            timestamp: new Date().toISOString(),
+            code: code,
+            description: description,
+            gameNumber: sasMeters.gamesPlayed,
+            credits: credits
+        };
+        tiltLog.unshift(tilt);
+        if (tiltLog.length > MAX_TILTS) tiltLog.pop();
+        try {
+            localStorage.setItem(TILT_KEY, JSON.stringify(tiltLog));
+        } catch (e) {}
+        console.warn('[TILT] ' + code + ': ' + description);
+    }
+    window.getTiltLog = function() { return tiltLog; };
+
+    // --- RNG INFORMATION ---
+    // GLI requires disclosure of the RNG method.
+    // We use JavaScript's built-in Math.random() (PRNG).
+    // For certification, this would need to be replaced with a
+    // hardware RNG or cryptographic PRNG, but Math.random() is
+    // sufficient for COAM skill games in Georgia.
+    window.getRNGInfo = function() {
+        return {
+            method: 'JavaScript Math.random() (V8 xorshift128+)',
+            type: 'PRNG (Pseudo-Random Number Generator)',
+            seedSource: 'V8 engine internal state',
+            certification: 'Suitable for COAM skill games (Georgia)',
+            note: 'For GLI-11 Class III compliance, replace with hardware RNG or CSPRNG'
+        };
+    };
+
+    // --- GAME IDENTIFICATION ---
+    // Required information for certification submissions
+    window.getGameInfo = function() {
+        return {
+            title: 'Black Ice Gaming - Game 1',
+            version: '1.0.0',
+            developer: 'Black Ice Gaming',
+            platform: 'HTML5 Canvas (Chrome 90+ / Windows 10 IoT)',
+            hardware: 'JAMMA 36-pin cabinet, Intel i5, 1920x1080',
+            rtpSettings: ['86%', '88%', '92%', '96%'],
+            paylines: 10,
+            maxBet: 200,
+            minBet: 10,
+            symbolCount: 10,
+            reelStrips: '48 stops per reel, 4 strip sets',
+            skillFeatures: ['Nudge (shift 1 reel position)', 'Symbol Switch (swap adjacent symbols)'],
+            bonusFeature: 'Hold and Spin (Fire Link style)',
+            jackpotLevels: ['Mini ($50)', 'Minor ($200)', 'Major ($1,000)', 'Mega ($10,000)'],
+            progressiveType: 'Local area progressive (WebSocket relay)',
+            compliance: ['GLI-11 (EGM)', 'GLI-21 (Skill Games)', 'Georgia COAM']
+        };
+    };
 
     // ===== PROGRESSIVE JACKPOT NETWORK =====
     // Links jackpot pools across multiple cabinets on the same local network.
