@@ -56,6 +56,116 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
+    // ===== BILL ACCEPTOR & TITO TICKET PRINTER =====
+    // Bill acceptors (like Pyramid Apex 7000) and TITO printers
+    // communicate over RS-232 serial. Since the game runs in Chrome,
+    // a small Node.js bridge service runs on the cabinet PC and relays
+    // serial data over WebSocket to the game.
+    //
+    // Bridge service runs on ws://localhost:9100 and handles:
+    // - Bill acceptor: receives bill-inserted events, sends enable/disable
+    // - TITO printer: sends print-ticket commands, receives print-complete
+    //
+    // Protocol messages (JSON over WebSocket):
+    // Bill inserted:  { type: "bill", amount: 100 }  (amount in cents)
+    // Print ticket:   { type: "print", credits: 500, datetime: "..." }
+    // Print complete: { type: "printed", success: true }
+    // Enable accept:  { type: "enable_acceptor" }
+    // Disable accept: { type: "disable_acceptor" }
+
+    let hardwareBridge = null;
+    let bridgeConnected = false;
+
+    // Connect to the hardware bridge WebSocket
+    function connectHardwareBridge() {
+        try {
+            hardwareBridge = new WebSocket('ws://localhost:9100');
+
+            hardwareBridge.onopen = function() {
+                bridgeConnected = true;
+                // Enable the bill acceptor on connection
+                hardwareBridge.send(JSON.stringify({ type: 'enable_acceptor' }));
+                console.log('[HARDWARE] Bridge connected');
+            };
+
+            hardwareBridge.onmessage = function(event) {
+                const msg = JSON.parse(event.data);
+
+                if (msg.type === 'bill') {
+                    // Bill inserted - convert cents to credits (1 cent = 1 credit)
+                    const creditsToAdd = msg.amount;
+                    credits += creditsToAdd;
+                    playBillInsertSound();
+                    console.log('[HARDWARE] Bill accepted: +' + creditsToAdd + ' credits');
+                }
+
+                if (msg.type === 'printed') {
+                    console.log('[HARDWARE] Ticket printed: ' + (msg.success ? 'OK' : 'FAILED'));
+                }
+            };
+
+            hardwareBridge.onclose = function() {
+                bridgeConnected = false;
+                // Auto-reconnect after 3 seconds
+                setTimeout(connectHardwareBridge, 3000);
+            };
+
+            hardwareBridge.onerror = function() {
+                bridgeConnected = false;
+            };
+        } catch (e) {
+            // Bridge not available - game still works with keyboard coin input
+            bridgeConnected = false;
+        }
+    }
+
+    // Send a TITO print command to the hardware bridge
+    function printTITOTicket(creditAmount) {
+        if (!bridgeConnected || !hardwareBridge) return false;
+        hardwareBridge.send(JSON.stringify({
+            type: 'print',
+            credits: creditAmount,
+            datetime: new Date().toISOString(),
+            machineId: 'BLACKICE-001'
+        }));
+        return true;
+    }
+
+    // Disable bill acceptor during spin (standard practice)
+    function disableBillAcceptor() {
+        if (bridgeConnected && hardwareBridge) {
+            hardwareBridge.send(JSON.stringify({ type: 'disable_acceptor' }));
+        }
+    }
+
+    // Re-enable bill acceptor after spin
+    function enableBillAcceptor() {
+        if (bridgeConnected && hardwareBridge) {
+            hardwareBridge.send(JSON.stringify({ type: 'enable_acceptor' }));
+        }
+    }
+
+    // Bill insert sound - crisp "cha-ching"
+    function playBillInsertSound() {
+        if (!audioCtx) return;
+        [523, 659, 784].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            const t = audioCtx.currentTime + i * 0.06;
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+            osc.start(t);
+            osc.stop(t + 0.15);
+        });
+    }
+
+    // Try to connect on startup (silently fails if bridge not running)
+    connectHardwareBridge();
+
     // ===== FULLSCREEN KIOSK MODE =====
     // On a JAMMA cabinet, Chrome runs with --kiosk --start-fullscreen flags.
     // This code handles fullscreen for development and as a fallback.
@@ -321,6 +431,9 @@
 
         // Feed a small portion of the bet into each jackpot pool
         feedJackpots();
+
+        // Disable bill acceptor during spin (industry standard)
+        disableBillAcceptor();
 
         // Initialize audio on first spin (browser requires user gesture)
         initAudio();
@@ -2228,14 +2341,14 @@
         betPerLine = totalBet / 10;
     }
 
-    // Cashout - prints a TITO ticket (placeholder for now)
+    // Cashout - prints a TITO ticket
     function cashout() {
         if (isSpinning) return;
         if (credits <= 0) return;
-        // In production, this sends a command to the TITO printer
-        // For now, just show a cashout message
         cashoutActive = true;
         cashoutAmount = credits;
+        // Send print command to TITO hardware (if bridge connected)
+        printTITOTicket(credits);
         credits = 0;
         cashoutTimer = 180; // show for 3 seconds at 60fps
         playCashoutSound();
@@ -2520,6 +2633,7 @@
             checkBonusTrigger(); // check if Hold and Spin bonus should trigger
             enableNudge(); // allow player to nudge one reel
             enableSwitch(); // allow player to swap two adjacent symbols
+            enableBillAcceptor(); // re-enable bill acceptor after spin
         }
     }
 

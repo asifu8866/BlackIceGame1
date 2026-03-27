@@ -28,11 +28,11 @@
 ## Phase 3: Hardware Prep
 > JAMMA buttons, fullscreen kiosk, bill acceptor
 
-- [ ] Map JAMMA 36-pin button inputs to keyboard events
-- [ ] Set up fullscreen kiosk mode (no browser toolbar)
+- [x] Map JAMMA 36-pin button inputs to keyboard events
+- [x] Set up fullscreen kiosk mode (no browser toolbar)
 - [ ] Integrate bill acceptor communication
 - [ ] Integrate TITO ticket printer
-- [ ] Build operator settings menu (RTP select, volume, diagnostics)
+- [x] Build operator settings menu (RTP select, volume, diagnostics)
 - [ ] Test on Intel i5 / Windows 10 IoT target hardware
 
 ## Phase 4: Multi-Theme
