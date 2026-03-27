@@ -21,9 +21,9 @@
 - [x] Implement Fireball lock mechanic during Hold and Spin
 - [x] Add 4-level jackpot system (Mini, Minor, Major, Mega)
 - [x] Add Nudge skill feature (shift reel one position)
-- [ ] Add Symbol Switch skill feature
+- [x] Add Symbol Switch skill feature
 - [x] Implement credit system (bet sizes, win payouts)
-- [ ] Hit frequency validation - confirm 32% target
+- [x] Hit frequency validation - confirm 32% target
 
 ## Phase 3: Hardware Prep
 > JAMMA buttons, fullscreen kiosk, bill acceptor
