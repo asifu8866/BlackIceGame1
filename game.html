@@ -228,6 +228,9 @@
         credits -= totalBet;
         lastWin = 0;
 
+        // Feed a small portion of the bet into each jackpot pool
+        feedJackpots();
+
         // Initialize audio on first spin (browser requires user gesture)
         initAudio();
         playSpinStartSound();
@@ -655,20 +658,18 @@
         ctx.shadowBlur = 0;
     }
 
-    // Draw the jackpot displays at the top
+    // Draw the jackpot displays at the top - shows LIVE progressive values
     function drawJackpotBar() {
-        const jackpots = [
-            { name: 'MEGA',  amount: '10,000', color: '#FF2222' },
-            { name: 'MAJOR', amount: '1,000',  color: '#FFD700' },
-            { name: 'MINOR', amount: '200',    color: '#44BBFF' },
-            { name: 'MINI',  amount: '50',     color: '#44FF44' }
-        ];
+        // Display order: MEGA (left) to MINI (right) - biggest first
+        const jackpotOrder = ['MEGA', 'MAJOR', 'MINOR', 'MINI'];
 
         const barY = MACHINE_Y + 168;
         const barW = (MACHINE_W - 100) / 4;
 
-        for (let i = 0; i < jackpots.length; i++) {
-            const jp = jackpots[i];
+        for (let i = 0; i < jackpotOrder.length; i++) {
+            const name = jackpotOrder[i];
+            const pool = jackpotPools[name];
+            const jp = JACKPOT_VALUES.find(j => j.name === name);
             const bx = MACHINE_X + 40 + i * barW;
 
             // Jackpot box background
@@ -680,12 +681,12 @@
             ctx.lineWidth = 1;
             roundRect(bx + 4, barY, barW - 8, 28, 6, false, true);
 
-            // Jackpot label and amount
+            // Jackpot label and LIVE amount from the pool
             ctx.fillStyle = jp.color;
             ctx.font = 'bold 16px Arial, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(jp.name + '  $' + jp.amount, bx + barW / 2, barY + 14);
+            ctx.fillText(name + '  $' + formatCredits(Math.floor(pool.current)), bx + barW / 2, barY + 14);
         }
     }
 
@@ -773,6 +774,40 @@
         { name: 'MEGA',  value: 10000, color: '#FF2222', weight: 3 },   // ultra rare
     ];
 
+    // ===== LIVE JACKPOT SYSTEM =====
+    // Jackpots are progressive - a small % of each bet feeds into each pool.
+    // When a jackpot fireball hits during Hold and Spin, the player wins
+    // the current live value, then it resets to the seed amount.
+    //
+    // Seed = starting value after a jackpot is won
+    // Feed = percentage of each bet that goes into this jackpot pool
+    const jackpotPools = {
+        'MINI':  { current: 50,    seed: 50,    feed: 0.005 },  // 0.5% of bet → MINI
+        'MINOR': { current: 200,   seed: 200,   feed: 0.003 },  // 0.3% of bet → MINOR
+        'MAJOR': { current: 1000,  seed: 1000,  feed: 0.001 },  // 0.1% of bet → MAJOR
+        'MEGA':  { current: 10000, seed: 10000, feed: 0.001 },  // 0.1% of bet → MEGA
+    };
+
+    // Feed all jackpot pools from the current bet (called each normal spin)
+    function feedJackpots() {
+        for (const name in jackpotPools) {
+            const pool = jackpotPools[name];
+            // Add a small fraction of the bet to each pool
+            // Random variation so the numbers tick up at different rates
+            pool.current += totalBet * pool.feed * (0.8 + Math.random() * 0.4);
+            // Round to nearest cent for clean display
+            pool.current = Math.round(pool.current * 100) / 100;
+        }
+    }
+
+    // Award a jackpot and reset it to the seed value
+    function awardJackpot(name) {
+        const pool = jackpotPools[name];
+        const amount = Math.floor(pool.current);
+        pool.current = pool.seed; // reset to starting value
+        return amount;
+    }
+
     const JACKPOT_CHANCE = 0.03;           // 3% chance each fireball is a jackpot
     const BONUS_FIREBALL_CHANCE = 0.20;    // 20% chance per empty cell per respin
     const BONUS_INITIAL_FIREBALLS = 6;     // how many fireballs appear when bonus triggers
@@ -798,16 +833,19 @@
     }
 
     // Pick a random jackpot level (weighted - MINI hits most often)
+    // Awards the LIVE jackpot amount from the pool, then resets it
     function randomJackpotValue() {
         const totalWeight = JACKPOT_VALUES.reduce((sum, j) => sum + j.weight, 0);
         let roll = Math.random() * totalWeight;
         for (const jp of JACKPOT_VALUES) {
             roll -= jp.weight;
             if (roll <= 0) {
-                return { value: jp.value, label: jp.name, color: jp.color, isJackpot: true, jackpotName: jp.name };
+                const amount = awardJackpot(jp.name); // grab live value and reset pool
+                return { value: amount, label: jp.name, color: jp.color, isJackpot: true, jackpotName: jp.name };
             }
         }
-        return { value: 50, label: 'MINI', color: '#44FF44', isJackpot: true, jackpotName: 'MINI' };
+        const amount = awardJackpot('MINI');
+        return { value: amount, label: 'MINI', color: '#44FF44', isJackpot: true, jackpotName: 'MINI' };
     }
 
     // Create an empty 5x3 bonus grid (all cells null)
@@ -917,8 +955,8 @@
             if (!allFull) break;
         }
         if (allFull) {
-            // Full grid = MEGA jackpot bonus on top of all collected values
-            bonusTotalWin += JACKPOT_VALUES.find(j => j.name === 'MEGA').value;
+            // Full grid = award the live MEGA jackpot on top of all collected values
+            bonusTotalWin += awardJackpot('MEGA');
         }
 
         // End bonus if out of respins or grid is full
