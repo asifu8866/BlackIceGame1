@@ -43,7 +43,7 @@
     // Convenience references to commonly used BlackIceMath values
     var BM = BlackIceMath;
     var NUM_REELS = BM.reels.NUM_REELS;
-    var NUM_ROWS = BM.reels.NUM_ROWS;
+    var NUM_ROWS = BM.reels.NUM_ROWS();
     var STRIP_LENGTH = BM.reels.STRIP_LENGTH;
     var PAYLINES = BM.pay.LINES;
 
@@ -638,7 +638,14 @@
     const REEL_W = 220;             // width of each reel column
     const REEL_H = 480;             // total height of the reel window
     const REEL_GAP = 16;            // gap between reels
-    const SYMBOL_H = 150;           // height of each symbol cell
+    var SYMBOL_H = 150;             // height of ONE symbol cell (recalculated on layout change)
+
+    function recalcVisualLayout() {
+        var rows = BM.reels.NUM_ROWS();
+        SYMBOL_H = Math.floor(REEL_H / rows) - 4;
+        NUM_ROWS = rows;
+        PAYLINES = BM.pay.LINES;
+    }
     const SYMBOL_PAD = 8;           // padding inside each symbol cell
 
     // ===== DRAWING FUNCTIONS =====
@@ -1383,8 +1390,8 @@
     // Draw the payline indicator arrows on the left side
     function drawPaylineMarkers() {
         const markerX = REEL_AREA_X - 40;
-        const rowLabels = ['TOP', 'MID', 'BOT'];
-        const rowColors = ['#FF4444', '#FFD700', '#44FF44'];
+        const rowLabels = ['TOP', 'MID', 'BOT', 'LOW'];
+        const rowColors = ['#FF4444', '#FFD700', '#44FF44', '#4488FF'];
 
         for (let row = 0; row < NUM_ROWS; row++) {
             const symY = REEL_AREA_Y + row * SYMBOL_H + (REEL_H - NUM_ROWS * SYMBOL_H) / 2;
@@ -1506,6 +1513,18 @@
     let betPerLine = 1;                    // credits wagered on each payline
     let totalBet = BM.pay.DEFAULT_BET;     // betPerLine x paylines (from math engine)
     let lastWin = 0;                       // total win from the most recent spin
+
+    // Apply a new grid layout (e.g. '5x3' or '5x4') and reset bet/reels
+    function applyGridLayout(layout) {
+        BM.grid.set(layout);
+        recalcVisualLayout();
+        currentBetIndex = 0;
+        var levels = BM.pay.BET_LEVELS();
+        totalBet = levels[0];
+        betPerLine = totalBet / BM.pay.NUM_LINES();
+        loadReelStrips();
+        updateReelGrid();
+    }
 
     // Format a number with commas for display (1000 -> "1,000")
     function formatCredits(num) {
@@ -2446,8 +2465,16 @@
 
     // Colors for each payline so they're easy to tell apart
     const PAYLINE_COLORS = [
-        '#FF2222', '#FFD700', '#44FF44', '#FF8800', '#44DDFF',
-        '#FF44FF', '#88FF44', '#FF4488', '#44FFDD', '#FFFF44'
+        '#FF4444', '#FFD700', '#44FF44', '#4488FF', '#FF44FF',
+        '#FF8800', '#00FFCC', '#FF6688', '#88AAFF', '#FFFF44',
+        '#FF2222', '#22FF88', '#8844FF', '#FF6600', '#00CCFF',
+        '#FFAA44', '#44FFAA', '#FF44AA', '#AAFF44', '#44AAFF',
+        '#CC4444', '#CCAA00', '#44CC44', '#4466CC', '#CC44CC',
+        '#CC6600', '#00CCAA', '#CC4466', '#6688CC', '#CCCC44',
+        '#AA2222', '#22AA66', '#6644AA', '#AA4400', '#0088AA',
+        '#AA8844', '#44AA88', '#AA4488', '#88AA44', '#4488AA',
+        '#882222', '#228844', '#442288', '#882200', '#006688',
+        '#886644', '#448866', '#884466', '#668844', '#446688'
     ];
 
     // ===== WIN DETECTION =====
@@ -2971,24 +2998,22 @@
         'Minus':        'BET_DOWN'       // - key
     };
 
-    // Bet levels available to the player (credits per line x 10 lines)
-    const BET_LEVELS = [10, 20, 50, 100, 200];
     let currentBetIndex = 0;
 
-    // Increase the bet to the next level
     function betUp() {
         if (isSpinning) return;
-        currentBetIndex = (currentBetIndex + 1) % BET_LEVELS.length;
-        totalBet = BET_LEVELS[currentBetIndex];
-        betPerLine = totalBet / 10;
+        var levels = BM.pay.BET_LEVELS();
+        currentBetIndex = Math.min(currentBetIndex + 1, levels.length - 1);
+        totalBet = levels[currentBetIndex];
+        betPerLine = totalBet / BM.pay.NUM_LINES();
     }
 
-    // Decrease the bet to the previous level
     function betDown() {
         if (isSpinning) return;
-        currentBetIndex = (currentBetIndex - 1 + BET_LEVELS.length) % BET_LEVELS.length;
-        totalBet = BET_LEVELS[currentBetIndex];
-        betPerLine = totalBet / 10;
+        var levels = BM.pay.BET_LEVELS();
+        currentBetIndex = Math.max(currentBetIndex - 1, 0);
+        totalBet = levels[currentBetIndex];
+        betPerLine = totalBet / BM.pay.NUM_LINES();
     }
 
     // Cashout - prints a TITO ticket
@@ -3079,6 +3104,7 @@
     let menuSelection = 0;
     const MENU_ITEMS = [
         { label: 'RTP SETTING', type: 'rtp' },
+        { label: 'GRID LAYOUT', type: 'grid' },
         { label: 'VOLUME', type: 'volume' },
         { label: 'TOTAL SPINS', type: 'info' },
         { label: 'TOTAL WAGERED', type: 'info' },
@@ -3117,6 +3143,16 @@
                 if (action === 'RIGHT') currentRTP = rtpOptions[Math.min(idx + 1, rtpOptions.length - 1)];
                 else currentRTP = rtpOptions[Math.max(idx - 1, 0)];
                 // loadReelStrips() called automatically by currentRTP setter
+            } else if (item.type === 'grid') {
+                var gridOptions = ['5x3', '5x4'];
+                var gIdx = gridOptions.indexOf(BM.grid.get());
+                if (action === 'RIGHT') {
+                    var newGrid = gridOptions[Math.min(gIdx + 1, gridOptions.length - 1)];
+                    applyGridLayout(newGrid);
+                } else if (action === 'LEFT') {
+                    var newGrid = gridOptions[Math.max(gIdx - 1, 0)];
+                    applyGridLayout(newGrid);
+                }
             } else if (item.type === 'volume') {
                 if (action === 'RIGHT') masterVolume = Math.min(1.0, masterVolume + 0.1);
                 else masterVolume = Math.max(0.0, masterVolume - 0.1);
@@ -3192,6 +3228,10 @@
 
             if (item.type === 'rtp') {
                 const valStr = isSelected ? '\u25C0 ' + currentRTP + '% \u25B6' : currentRTP + '%';
+                ctx.fillText(valStr, MACHINE_X + MACHINE_W - 120, y + 15);
+            } else if (item.type === 'grid') {
+                var config = BM.grid.config();
+                var valStr = isSelected ? '\u25C0 ' + config.description + ' \u25B6' : config.description;
                 ctx.fillText(valStr, MACHINE_X + MACHINE_W - 120, y + 15);
             } else if (item.type === 'volume') {
                 const volPct = Math.round(masterVolume * 100);
