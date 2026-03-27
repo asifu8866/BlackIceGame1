@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "game",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["/Users/asifumar/Cloude Code/BlackIceGame1/.claude/serve.sh"],
+      "port": 8080
+    }
+  ]
+}
