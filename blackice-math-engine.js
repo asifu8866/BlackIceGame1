@@ -132,7 +132,49 @@
     var STRIP_LENGTH = 48;
     var currentRTP = 92;
 
+    // ===== 5x4 REEL STRIPS =====
+    // Same 48 stops per reel, tuned for 50-payline economics.
+    // More high-pay symbols to compensate for lower betPerLine (totalBet/50 vs /10).
+
+    var STRIPS_92_4ROW = [
+        [8,7,6,5,4,3,2,1,8,7,6,5,10,8,7,6,5,4,3,0,8,7,6,5,4,3,2,1,8,7,6,5,9,8,7,6,5,4,3,2,1,0,8,7,6,10,8,7],
+        [7,6,5,4,3,2,1,8,7,6,5,4,8,7,6,5,10,8,7,6,5,4,3,0,8,7,6,5,4,3,2,1,9,8,7,6,5,4,3,2,1,0,8,7,6,10,8,7],
+        [6,5,4,3,2,1,8,7,6,5,4,3,8,7,6,5,4,0,8,7,6,5,4,3,2,10,8,7,6,5,4,3,9,8,7,6,5,4,3,2,1,0,8,7,6,10,8,7],
+        [5,4,3,2,1,8,7,6,5,4,3,2,8,7,6,5,10,8,7,6,5,4,3,0,8,7,6,5,4,3,2,1,9,8,7,6,5,4,3,2,1,0,8,7,6,10,8,7],
+        [4,3,2,1,8,7,6,5,4,3,2,1,8,7,6,5,10,8,7,6,5,4,3,0,8,7,6,5,4,3,2,9,8,7,6,5,4,3,2,1,0,8,7,6,5,10,8,7]
+    ];
+
+    var STRIPS_88_4ROW = [
+        STRIPS_92_4ROW[0].slice(),
+        STRIPS_92_4ROW[1].slice(),
+        (function() { var s = STRIPS_92_4ROW[2].slice(); var wi = s.indexOf(0); if (wi !== -1) s[wi] = 8; return s; })(),
+        STRIPS_92_4ROW[3].slice(),
+        STRIPS_92_4ROW[4].slice()
+    ];
+
+    var STRIPS_86_4ROW = [
+        STRIPS_88_4ROW[0].slice(),
+        (function() { var s = STRIPS_88_4ROW[1].slice(); var mi = s.indexOf(6); if (mi !== -1) s[mi] = 8; return s; })(),
+        STRIPS_88_4ROW[2].slice(),
+        STRIPS_88_4ROW[3].slice(),
+        STRIPS_88_4ROW[4].slice()
+    ];
+
+    var STRIPS_96_4ROW = [
+        STRIPS_92_4ROW[0].slice(),
+        STRIPS_92_4ROW[1].slice(),
+        (function() { var s = STRIPS_92_4ROW[2].slice(); var gi = s.lastIndexOf(8); if (gi !== -1) s[gi] = 0; return s; })(),
+        STRIPS_92_4ROW[3].slice(),
+        STRIPS_92_4ROW[4].slice()
+    ];
+
     function getStrips(rtp) {
+        if (currentGridLayout === '5x4') {
+            if (rtp === 86) return STRIPS_86_4ROW;
+            if (rtp === 88) return STRIPS_88_4ROW;
+            if (rtp === 96) return STRIPS_96_4ROW;
+            return STRIPS_92_4ROW;
+        }
         if (rtp === 86) return STRIPS_86;
         if (rtp === 88) return STRIPS_88;
         if (rtp === 96) return STRIPS_96;
@@ -160,7 +202,7 @@
     }
 
     // ===== PAYLINES =====
-    var PAYLINES = [
+    var PAYLINES_10 = [
         [1, 1, 1, 1, 1],
         [0, 0, 0, 0, 0],
         [2, 2, 2, 2, 2],
@@ -173,7 +215,62 @@
         [1, 0, 1, 0, 1]
     ];
 
+    var PAYLINES = PAYLINES_10;
     var NUM_PAYLINES = PAYLINES.length;
+
+    // ===== 50 PAYLINES FOR 5x4 GRID =====
+    var PAYLINES_50 = [
+        [1, 1, 1, 1, 1],   // 1: middle
+        [0, 0, 0, 0, 0],   // 2: top
+        [2, 2, 2, 2, 2],   // 3: third row
+        [0, 1, 2, 1, 0],   // 4: V down
+        [2, 1, 0, 1, 2],   // 5: V up
+        [0, 0, 1, 2, 2],   // 6: diagonal down
+        [2, 2, 1, 0, 0],   // 7: diagonal up
+        [1, 0, 0, 0, 1],   // 8: top hat
+        [1, 2, 2, 2, 1],   // 9: bottom hat
+        [1, 0, 1, 0, 1],   // 10: zigzag
+        [3, 3, 3, 3, 3],   // 11: bottom row
+        [0, 1, 2, 3, 3],   // 12: full diagonal down
+        [3, 2, 1, 0, 0],   // 13: full diagonal up
+        [3, 3, 2, 1, 0],   // 14: rise from bottom
+        [0, 1, 2, 3, 2],   // 15: down-then-up
+        [3, 2, 1, 2, 3],   // 16: mountain from bottom
+        [0, 1, 0, 1, 0],   // 17: sawtooth top
+        [3, 2, 3, 2, 3],   // 18: sawtooth bottom
+        [1, 2, 3, 2, 1],   // 19: valley
+        [2, 3, 2, 3, 2],   // 20: low zigzag
+        [0, 0, 1, 0, 0],   // 21: shallow dip
+        [3, 3, 2, 3, 3],   // 22: shallow rise from bottom
+        [1, 1, 0, 1, 1],   // 23: slight top dip
+        [2, 2, 3, 2, 2],   // 24: slight bottom dip
+        [0, 1, 1, 1, 0],   // 25: plateau top
+        [3, 2, 2, 2, 3],   // 26: plateau bottom
+        [0, 2, 0, 2, 0],   // 27: wide zigzag top
+        [3, 1, 3, 1, 3],   // 28: wide zigzag bottom
+        [1, 0, 2, 0, 1],   // 29: W shape top
+        [2, 3, 1, 3, 2],   // 30: W shape bottom
+        [0, 0, 2, 0, 0],   // 31: deep dip from top
+        [3, 3, 1, 3, 3],   // 32: deep dip from bottom
+        [1, 2, 1, 2, 1],   // 33: mid zigzag
+        [2, 1, 2, 1, 2],   // 34: reverse mid zigzag
+        [0, 1, 3, 1, 0],   // 35: deep V
+        [3, 2, 0, 2, 3],   // 36: deep inverted V
+        [0, 2, 1, 2, 0],   // 37: asymmetric V
+        [3, 1, 2, 1, 3],   // 38: asymmetric inverted V
+        [1, 3, 1, 3, 1],   // 39: big zigzag mid-bottom
+        [2, 0, 2, 0, 2],   // 40: big zigzag mid-top
+        [0, 3, 0, 3, 0],   // 41: extreme zigzag
+        [3, 0, 3, 0, 3],   // 42: reverse extreme zigzag
+        [0, 0, 3, 0, 0],   // 43: spike down from top
+        [3, 3, 0, 3, 3],   // 44: spike up from bottom
+        [1, 1, 2, 3, 3],   // 45: gradual descent
+        [2, 2, 1, 0, 0],   // 46: gradual ascent
+        [0, 2, 3, 2, 0],   // 47: deep scoop
+        [3, 1, 0, 1, 3],   // 48: deep arch
+        [1, 0, 3, 0, 1],   // 49: extreme W
+        [2, 3, 0, 3, 2]    // 50: extreme M
+    ];
 
     // ===== BET LEVELS =====
     var BET_LEVELS = [10, 20, 50, 100, 200];
@@ -299,7 +396,7 @@
             triggerFreeSpins: scatters >= 3,
             fireballCount: fireballs.count,
             fireballPositions: fireballs.positions,
-            triggerHoldAndSpin: fireballs.count >= 6
+            triggerHoldAndSpin: fireballs.count >= BONUS_INITIAL_FIREBALLS
         };
     }
 
@@ -494,7 +591,8 @@
             protocol: 'SAS_602',
             payoutMethod: 'GIFT_CARD',
             responsibleGaming: true,
-            creditCarryOver: true
+            creditCarryOver: true,
+            gridLayout: '5x3'
         },
         GLI_CLASS_III: {
             name: 'GLI Class III (Casino/Game Room)',
@@ -503,7 +601,8 @@
             protocol: 'SAS_G2S',
             payoutMethod: 'CASH',
             responsibleGaming: false,
-            creditCarryOver: false
+            creditCarryOver: false,
+            gridLayout: '5x4'
         },
         GLI_CLASS_II: {
             name: 'GLI Class II (Tribal Casino)',
@@ -512,7 +611,8 @@
             protocol: 'GLI_33',
             payoutMethod: 'CASH',
             responsibleGaming: false,
-            creditCarryOver: false
+            creditCarryOver: false,
+            gridLayout: '5x4'
         },
         STANDALONE: {
             name: 'Standalone (Testing/Demo)',
@@ -521,14 +621,18 @@
             protocol: 'NONE',
             payoutMethod: 'NONE',
             responsibleGaming: false,
-            creditCarryOver: false
+            creditCarryOver: false,
+            gridLayout: '5x3'
         }
     };
 
     var currentJurisdiction = 'STANDALONE';
 
     function setJurisdiction(mode) {
-        if (JURISDICTIONS[mode]) currentJurisdiction = mode;
+        if (JURISDICTIONS[mode]) {
+            currentJurisdiction = mode;
+            setGridLayout(JURISDICTIONS[mode].gridLayout);
+        }
     }
 
     function getJurisdiction() {
@@ -539,49 +643,107 @@
         return JURISDICTIONS[currentJurisdiction].skillEnabled;
     }
 
+    // ===== GRID LAYOUT SYSTEM =====
+    // 5x3 = skill game markets (Georgia COAM). Smaller grid makes Nudge/Switch more impactful.
+    // 5x4 = casino markets (GLI Class III). Matches Fire Link layout, 50 paylines.
+
+    var GRID_LAYOUTS = {
+        '5x3': {
+            rows: 3,
+            paylineCount: 10,
+            betLevels: [10, 20, 50, 100, 200],
+            defaultBet: 10,
+            fireballTrigger: 6,    // 6 of 15 cells
+            description: '5 Reels x 3 Rows (10 Lines)'
+        },
+        '5x4': {
+            rows: 4,
+            paylineCount: 50,
+            betLevels: [50, 100, 200, 500, 1000],
+            defaultBet: 50,
+            fireballTrigger: 8,    // 8 of 20 cells
+            description: '5 Reels x 4 Rows (50 Lines)'
+        }
+    };
+
+    var currentGridLayout = '5x3';
+
+    function setGridLayout(layout) {
+        if (!GRID_LAYOUTS[layout]) return;
+        currentGridLayout = layout;
+        NUM_ROWS = GRID_LAYOUTS[layout].rows;
+        NUM_PAYLINES = GRID_LAYOUTS[layout].paylineCount;
+        BONUS_INITIAL_FIREBALLS = GRID_LAYOUTS[layout].fireballTrigger;
+        BET_LEVELS = GRID_LAYOUTS[layout].betLevels;
+        DEFAULT_BET = GRID_LAYOUTS[layout].defaultBet;
+        PAYLINES = (layout === '5x4') ? PAYLINES_50 : PAYLINES_10;
+        NUM_PAYLINES = PAYLINES.length;
+    }
+
+    function getGridLayout() {
+        return currentGridLayout;
+    }
+
+    function getGridConfig() {
+        return GRID_LAYOUTS[currentGridLayout];
+    }
+
     // ===== SIMULATION ENGINE =====
     function runSimulation(numSpins) {
         numSpins = numSpins || 100000;
         var results = {};
+        var savedLayout = currentGridLayout;
+        var savedRTP = currentRTP;
 
-        [86, 88, 92, 96].forEach(function(rtp) {
-            var savedRTP = currentRTP;
-            currentRTP = rtp;
+        ['5x3', '5x4'].forEach(function(layout) {
+            setGridLayout(layout);
+            var layoutConfig = GRID_LAYOUTS[layout];
 
-            var totalWagered = 0, totalPaid = 0, winSpins = 0, bonusTriggers = 0, scatterTriggers = 0;
+            [86, 88, 92, 96].forEach(function(rtp) {
+                currentRTP = rtp;
 
-            for (var spin = 0; spin < numSpins; spin++) {
-                totalWagered += 10;
-                var positions = [];
-                for (var r = 0; r < NUM_REELS; r++) {
-                    positions.push(cryptoRandomInt(STRIP_LENGTH));
+                var betPerLine = 1;
+                var totalBet = layoutConfig.paylineCount * betPerLine;
+                var totalWagered = 0, totalPaid = 0, winSpins = 0, bonusTriggers = 0, scatterTriggers = 0;
+
+                for (var spin = 0; spin < numSpins; spin++) {
+                    totalWagered += totalBet;
+                    var positions = [];
+                    for (var r = 0; r < NUM_REELS; r++) {
+                        positions.push(cryptoRandomInt(STRIP_LENGTH));
+                    }
+                    var grid = buildGrid(positions);
+                    var wins = checkPaylineWins(grid, betPerLine);
+                    var spinWin = 0;
+                    for (var w = 0; w < wins.length; w++) spinWin += wins[w].payout;
+                    if (spinWin > 0) winSpins++;
+                    totalPaid += spinWin;
+
+                    var fb = countFireballs(grid);
+                    if (fb.count >= BONUS_INITIAL_FIREBALLS) bonusTriggers++;
+                    var sc = countScatters(grid);
+                    if (sc >= 3) scatterTriggers++;
                 }
-                var grid = buildGrid(positions);
-                var wins = checkPaylineWins(grid, 1);
-                var spinWin = 0;
-                for (var w = 0; w < wins.length; w++) spinWin += wins[w].payout;
-                if (spinWin > 0) winSpins++;
-                totalPaid += spinWin;
 
-                var fb = countFireballs(grid);
-                if (fb.count >= 6) bonusTriggers++;
-                var sc = countScatters(grid);
-                if (sc >= 3) scatterTriggers++;
-            }
-
-            currentRTP = savedRTP;
-
-            results[rtp + '%'] = {
-                spins: numSpins,
-                hitFrequency: (winSpins / numSpins * 100).toFixed(2) + '%',
-                baseGameRTP: (totalPaid / totalWagered * 100).toFixed(2) + '% (base game only, excludes bonus/FS/JP)',
-                targetRTP: rtp + '%',
-                bonusTriggers: bonusTriggers,
-                scatterTriggers: scatterTriggers,
-                avgSpinsBetweenBonus: bonusTriggers > 0 ? Math.round(numSpins / bonusTriggers) : 'N/A',
-                avgSpinsBetweenFreeSpins: scatterTriggers > 0 ? Math.round(numSpins / scatterTriggers) : 'N/A'
-            };
+                results[layout + ' ' + rtp + '%'] = {
+                    layout: layout,
+                    rows: layoutConfig.rows,
+                    paylines: layoutConfig.paylineCount,
+                    spins: numSpins,
+                    hitFrequency: (winSpins / numSpins * 100).toFixed(2) + '%',
+                    baseGameRTP: (totalPaid / totalWagered * 100).toFixed(2) + '% (base game only)',
+                    targetRTP: rtp + '%',
+                    bonusTriggers: bonusTriggers,
+                    scatterTriggers: scatterTriggers,
+                    avgSpinsBetweenBonus: bonusTriggers > 0 ? Math.round(numSpins / bonusTriggers) : 'N/A',
+                    avgSpinsBetweenFreeSpins: scatterTriggers > 0 ? Math.round(numSpins / scatterTriggers) : 'N/A'
+                };
+            });
         });
+
+        // Restore original state
+        currentRTP = savedRTP;
+        setGridLayout(savedLayout);
 
         console.log('=== BLACK ICE MATH ENGINE SIMULATION ===');
         console.table(results);
@@ -599,6 +761,8 @@
             title: 'Black Ice Gaming - Day of the Dead',
             version: '2.0.0',
             mathEngineVersion: '2.0.0',
+            gridLayout: currentGridLayout,
+            gridDescription: GRID_LAYOUTS[currentGridLayout].description,
             developer: 'Black Ice Gaming',
             symbolCount: SYMBOLS.length,
             reelStrips: STRIP_LENGTH + ' stops per reel, 4 RTP variants',
@@ -618,8 +782,9 @@
     window.BlackIceMath = {
         rng:          { random: cryptoRandom, randomInt: cryptoRandomInt, weightedRandom: weightedRandom, shuffle: shuffle },
         symbols:      { ALL: SYMBOLS, get: getSymbol, getByName: getSymbolByName, isWild: isWild, isScatter: isScatter, isFireball: isFireball, isSpecial: isSpecial, COUNT: SYMBOLS.length },
-        reels:        { NUM_REELS: NUM_REELS, NUM_ROWS: NUM_ROWS, STRIP_LENGTH: STRIP_LENGTH, getStrips: getStrips, getActiveStrips: getActiveStrips, setRTP: setRTP, getRTP: getRTP },
-        pay:          { TABLE: PAYTABLE, LINES: PAYLINES, NUM_LINES: NUM_PAYLINES, BET_LEVELS: BET_LEVELS, DEFAULT_BET: DEFAULT_BET, getSymbolPay: function(n,c){ if(c<3||c>5)return 0; var e=PAYTABLE[n]; return e?e[c-3]:0; } },
+        reels:        { NUM_REELS: NUM_REELS, NUM_ROWS: function(){ return NUM_ROWS; }, STRIP_LENGTH: STRIP_LENGTH, getStrips: getStrips, getActiveStrips: getActiveStrips, setRTP: setRTP, getRTP: getRTP },
+        pay:          { TABLE: PAYTABLE, LINES: PAYLINES, NUM_LINES: function(){ return NUM_PAYLINES; }, BET_LEVELS: function(){ return BET_LEVELS; }, DEFAULT_BET: function(){ return DEFAULT_BET; }, getSymbolPay: function(n,c){ if(c<3||c>5)return 0; var e=PAYTABLE[n]; return e?e[c-3]:0; } },
+        grid:         { LAYOUTS: GRID_LAYOUTS, set: setGridLayout, get: getGridLayout, config: getGridConfig },
         spin:         { generate: generateSpin, buildGrid: buildGrid, resolve: resolveSpin, checkWins: checkPaylineWins, recheckWins: recheckWins, countScatters: countScatters, countFireballs: countFireballs },
         bonus:        { FIREBALL_CHANCE: BONUS_FIREBALL_CHANCE, INITIAL_FIREBALLS: BONUS_INITIAL_FIREBALLS, RESPINS: BONUS_RESPINS, rollNextTrigger: rollNextBonusTrigger, randomFireballValue: randomFireballValue, initGrid: initBonusGrid, resolveRespin: resolveBonusRespin },
         freeSpins:    { AWARDS: FREE_SPIN_AWARDS, WILD_MULTIPLIER: FREE_SPIN_WILD_MULTIPLIER, getCount: getFreeSpinCount, resolveSpin: resolveFreeSpinSpin },
