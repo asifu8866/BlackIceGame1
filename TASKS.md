@@ -19,7 +19,7 @@
 - [x] Create paytable with correct symbol values
 - [x] Build Hold and Spin bonus trigger (every 80-120 spins)
 - [x] Implement Fireball lock mechanic during Hold and Spin
-- [ ] Add 4-level jackpot system (Mini, Minor, Major, Mega)
+- [x] Add 4-level jackpot system (Mini, Minor, Major, Mega)
 - [ ] Add Nudge skill feature (shift reel one position)
 - [ ] Add Symbol Switch skill feature
 - [ ] Implement credit system (bet sizes, win payouts)
