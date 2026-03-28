@@ -1512,7 +1512,7 @@
     // Default bet comes from the math engine
     let credits = 1000;                    // starting balance
     let betPerLine = 1;                    // credits wagered on each payline
-    let totalBet = BM.pay.DEFAULT_BET;     // betPerLine x paylines (from math engine)
+    let totalBet = BM.pay.DEFAULT_BET();    // betPerLine x paylines (from math engine)
     let lastWin = 0;                       // total win from the most recent spin
 
     // Apply a new grid layout (e.g. '5x3' or '5x4') and reset bet/reels
