@@ -1,0 +1,21 @@
+{
+  "pools": {
+    "MINI": {
+      "current": 50,
+      "seed": 50
+    },
+    "MINOR": {
+      "current": 200,
+      "seed": 200
+    },
+    "MAJOR": {
+      "current": 1000,
+      "seed": 1000
+    },
+    "MEGA": {
+      "current": 10000,
+      "seed": 10000
+    }
+  },
+  "savedAt": "2026-03-27T19:08:24.411Z"
+}
