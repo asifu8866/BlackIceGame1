@@ -646,6 +646,7 @@
         NUM_ROWS = rows;
         PAYLINES = BM.pay.LINES;
     }
+    recalcVisualLayout(); // initialise SYMBOL_H from the engine on startup
     const SYMBOL_PAD = 8;           // padding inside each symbol cell
 
     // ===== DRAWING FUNCTIONS =====
@@ -1524,6 +1525,9 @@
         betPerLine = totalBet / BM.pay.NUM_LINES();
         loadReelStrips();
         updateReelGrid();
+        activeWins = [];
+        showingWins = false;
+        winDisplayIndex = -1;
     }
 
     // Format a number with commas for display (1000 -> "1,000")
@@ -3146,11 +3150,12 @@
             } else if (item.type === 'grid') {
                 var gridOptions = ['5x3', '5x4'];
                 var gIdx = gridOptions.indexOf(BM.grid.get());
+                var newGrid;
                 if (action === 'RIGHT') {
-                    var newGrid = gridOptions[Math.min(gIdx + 1, gridOptions.length - 1)];
+                    newGrid = gridOptions[Math.min(gIdx + 1, gridOptions.length - 1)];
                     applyGridLayout(newGrid);
                 } else if (action === 'LEFT') {
-                    var newGrid = gridOptions[Math.max(gIdx - 1, 0)];
+                    newGrid = gridOptions[Math.max(gIdx - 1, 0)];
                     applyGridLayout(newGrid);
                 }
             } else if (item.type === 'volume') {
